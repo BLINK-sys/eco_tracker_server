@@ -4,6 +4,9 @@ from .locations import locations_bp
 from .containers import containers_bp
 from .reports import reports_bp
 from .companies import companies_bp
+from .users import users_bp
+from .roles import roles_bp
+from .sensors import sensors_bp
 
 
 def register_blueprints(app):
@@ -13,4 +16,7 @@ def register_blueprints(app):
     app.register_blueprint(containers_bp, url_prefix='/api/containers')
     app.register_blueprint(reports_bp, url_prefix='/api/reports')
     app.register_blueprint(companies_bp, url_prefix='/api/companies')
+    app.register_blueprint(users_bp, url_prefix='/api/users')
+    app.register_blueprint(roles_bp, url_prefix='/api/roles')
+    app.register_blueprint(sensors_bp, url_prefix='/api/sensors')
 

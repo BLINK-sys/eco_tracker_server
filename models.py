@@ -41,6 +41,88 @@ class Company(db.Model):
         }
 
 
+class Role(db.Model):
+    """Модель роли пользователя"""
+    __tablename__ = 'roles'
+    
+    id = db.Column(db.String(36), primary_key=True, default=generate_uuid)
+    name = db.Column(db.String(50), unique=True, nullable=False)  # Владелец, Оператор
+    description = db.Column(db.Text, nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Связи
+    users = db.relationship('User', backref='role_obj')
+    
+    def to_dict(self):
+        """Преобразует модель в словарь"""
+        return {
+            'id': self.id,
+            'name': self.name,
+            'description': self.description,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None
+        }
+
+
+class AccessRight(db.Model):
+    """Модель прав доступа для ролей"""
+    __tablename__ = 'access_rights'
+    
+    id = db.Column(db.String(36), primary_key=True, default=generate_uuid)
+    user_id = db.Column(db.String(36), db.ForeignKey('users.id'), nullable=False)
+    
+    # Права на страницы
+    can_view_monitoring = db.Column(db.Boolean, default=False)
+    can_view_notifications = db.Column(db.Boolean, default=False)
+    can_view_locations = db.Column(db.Boolean, default=False)
+    can_view_reports = db.Column(db.Boolean, default=False)
+    can_view_admin = db.Column(db.Boolean, default=False)
+    
+    # Права в администрировании
+    can_manage_users = db.Column(db.Boolean, default=False)
+    can_manage_companies = db.Column(db.Boolean, default=False)
+    can_view_security = db.Column(db.Boolean, default=False)
+    can_manage_notifications = db.Column(db.Boolean, default=False)
+    
+    # Права на управление площадками
+    can_create_locations = db.Column(db.Boolean, default=False)
+    can_edit_locations = db.Column(db.Boolean, default=False)
+    can_delete_locations = db.Column(db.Boolean, default=False)
+    
+    # Права на управление контейнерами
+    can_create_containers = db.Column(db.Boolean, default=False)
+    can_edit_containers = db.Column(db.Boolean, default=False)
+    can_delete_containers = db.Column(db.Boolean, default=False)
+    
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    def to_dict(self):
+        """Преобразует модель в словарь"""
+        return {
+            'id': self.id,
+            'user_id': self.user_id,
+            'can_view_monitoring': self.can_view_monitoring,
+            'can_view_notifications': self.can_view_notifications,
+            'can_view_locations': self.can_view_locations,
+            'can_view_reports': self.can_view_reports,
+            'can_view_admin': self.can_view_admin,
+            'can_manage_users': self.can_manage_users,
+            'can_manage_companies': self.can_manage_companies,
+            'can_view_security': self.can_view_security,
+            'can_manage_notifications': self.can_manage_notifications,
+            'can_create_locations': self.can_create_locations,
+            'can_edit_locations': self.can_edit_locations,
+            'can_delete_locations': self.can_delete_locations,
+            'can_create_containers': self.can_create_containers,
+            'can_edit_containers': self.can_edit_containers,
+            'can_delete_containers': self.can_delete_containers,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None
+        }
+
+
 class User(db.Model):
     """Модель пользователя"""
     __tablename__ = 'users'
@@ -48,10 +130,13 @@ class User(db.Model):
     id = db.Column(db.String(36), primary_key=True, default=generate_uuid)
     email = db.Column(db.String(120), unique=True, nullable=False)  # email используется как username
     password_hash = db.Column(db.String(255), nullable=False)
-    role = db.Column(db.String(20), default='user')  # user, admin
+    role_id = db.Column(db.String(36), db.ForeignKey('roles.id'), nullable=False)  # Связь с ролями
     parent_company_id = db.Column(db.String(36), db.ForeignKey('companies.id'), nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Связи (company и role_obj уже определены через backref в соответствующих моделях)
+    access_rights = db.relationship('AccessRight', backref='user', cascade='all, delete-orphan')
     
     def set_password(self, password):
         """Устанавливает хэш пароля"""
@@ -66,9 +151,12 @@ class User(db.Model):
         return {
             'id': self.id,
             'email': self.email,
-            'role': self.role,
+            'role': self.role_obj.name if self.role_obj else None,  # Получаем название роли из связанного объекта
+            'role_id': self.role_id,
             'parent_company_id': self.parent_company_id,
             'company': self.company.to_dict() if self.company else None,
+            'role_obj': self.role_obj.to_dict() if self.role_obj else None,
+            'access_rights': [right.to_dict() for right in self.access_rights] if self.access_rights else [],
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'updated_at': self.updated_at.isoformat() if self.updated_at else None
         }

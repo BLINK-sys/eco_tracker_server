@@ -2,13 +2,18 @@ from flask import Flask, jsonify, request
 from flask_cors import CORS
 from flask_jwt_extended import JWTManager
 from flask_migrate import Migrate
+from flask_socketio import SocketIO
 from config import config
 from models import db
 from routes import register_blueprints
 import os
 
+# Глобальная переменная для SocketIO
+socketio = None
+
 def create_app(config_name=None):
     """Фабрика приложений Flask"""
+    global socketio
     
     if config_name is None:
         config_name = os.getenv('FLASK_ENV', 'development')
@@ -18,6 +23,15 @@ def create_app(config_name=None):
     
     # Инициализация расширений
     db.init_app(app)
+    
+    # Инициализация SocketIO
+    socketio = SocketIO(
+        app,
+        cors_allowed_origins="*" if app.config['DEBUG'] else app.config['CORS_ORIGINS'],
+        async_mode='threading',
+        logger=True,
+        engineio_logger=True
+    )
     
     # Настройка CORS с поддержкой всех необходимых заголовков
     # В режиме разработки разрешаем все localhost порты
@@ -100,6 +114,11 @@ def create_app(config_name=None):
         db.session.rollback()
         return jsonify({'error': 'Внутренняя ошибка сервера'}), 500
     
+    # Регистрация WebSocket событий
+    from socket_events import register_socket_events, set_socketio
+    set_socketio(socketio)  # Устанавливаем глобальную ссылку
+    register_socket_events(socketio)
+    
     # Создание таблиц БД
     with app.app_context():
         db.create_all()
@@ -107,10 +126,17 @@ def create_app(config_name=None):
         from init_data import init_test_data
         init_test_data()
     
+    # Запуск симулятора датчиков (для тестирования)
+    # В продакшене это будет заменено на реальные датчики IoT
+    if app.config['DEBUG']:
+        from sensor_simulator import start_sensor_simulator
+        start_sensor_simulator(app)
+    
     return app
 
 
 if __name__ == '__main__':
     app = create_app()
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    # Используем socketio.run вместо app.run для поддержки WebSocket
+    socketio.run(app, host='0.0.0.0', port=5000, debug=True, allow_unsafe_werkzeug=True)
 

@@ -39,15 +39,44 @@ def register():
             if not company:
                 return jsonify({'error': 'Компания не найдена'}), 404
         
+        # Поиск роли по умолчанию (владелец)
+        from models import Role
+        default_role = Role.query.filter_by(name='Владелец').first()
+        if not default_role:
+            return jsonify({'error': 'Роль по умолчанию не найдена'}), 400
+        
         # Создание пользователя
         user = User(
             email=email,
-            role=data.get('role', 'user'),
+            role_id=default_role.id,
             parent_company_id=parent_company_id
         )
         user.set_password(data['password'])
         
         db.session.add(user)
+        db.session.flush()  # Получаем ID пользователя
+        
+        # Создание прав доступа по умолчанию (полные права)
+        from models import AccessRight
+        default_rights = AccessRight(
+            user_id=user.id,
+            can_view_monitoring=True,
+            can_view_notifications=True,
+            can_view_locations=True,
+            can_view_reports=True,
+            can_view_admin=True,
+            can_manage_users=True,
+            can_manage_companies=True,
+            can_view_security=True,
+            can_manage_notifications=True,
+            can_create_locations=True,
+            can_edit_locations=True,
+            can_delete_locations=True,
+            can_create_containers=True,
+            can_edit_containers=True,
+            can_delete_containers=True
+        )
+        db.session.add(default_rights)
         db.session.commit()
         
         # Создание токенов
@@ -119,7 +148,7 @@ def refresh():
 @auth_bp.route('/me', methods=['GET'])
 @jwt_required()
 def get_current_user():
-    """Получение информации о текущем пользователе"""
+    """Получение информации о текущем пользователе с правами доступа"""
     try:
         current_user_id = get_jwt_identity()
         user = User.query.get(current_user_id)
@@ -130,5 +159,7 @@ def get_current_user():
         return jsonify(user.to_dict()), 200
         
     except Exception as e:
-        return jsonify({'error': f'Ошибка получения данных: {str(e)}'}), 500
+        return jsonify({'error': f'Ошибка получения пользователя: {str(e)}'}), 500
+
+
 

@@ -1,4 +1,4 @@
-from models import db, User, Location, Container, Company
+from models import db, User, Location, Container, Company, Role, AccessRight
 from datetime import datetime, timedelta
 import uuid
 
@@ -8,177 +8,169 @@ def init_test_data():
     
     print("Проверка и инициализация тестовых данных...")
     
-    # Создание тестовых компаний (если их нет)
-    company1 = Company.query.filter_by(name='EcoService Астана').first()
-    if not company1:
-        company1 = Company(
-            name='EcoService Астана',
-            description='Компания по сбору и переработке отходов в Астане',
-            address='пр. Кабанбай Батыра, 1, Астана',
-            phone='+7 (7172) 111-222',
-            email='info@ecoservice.kz'
+    # Создание компании ТОО EcoTracker
+    company = Company.query.filter_by(name='ТОО EcoTracker').first()
+    if not company:
+        company = Company(
+            name='ТОО EcoTracker',
+            description='Компания по управлению отходами',
+            address='ул. Кенесары 52',
+            phone='+77009631660',
+            email='bocan.anton@mail.ru'
         )
-        db.session.add(company1)
-        print("  - Создана компания: EcoService Астана")
+        db.session.add(company)
+        print("  - Создана компания: ТОО EcoTracker")
     
-    company2 = Company.query.filter_by(name='ГринТех КЗ').first()
-    if not company2:
-        company2 = Company(
-            name='ГринТех КЗ',
-            description='Инновационные решения для управления отходами',
-            address='ул. Достык, 25, Астана',
-            phone='+7 (7172) 333-444',
-            email='contact@greentech.kz'
+    db.session.flush()  # Сохраняем компанию, чтобы получить её ID
+    
+    # Создание глобальных ролей (один раз для всей системы)
+    owner_role = Role.query.filter_by(name='Владелец').first()
+    if not owner_role:
+        owner_role = Role(
+            name='Владелец',
+            description='Полный доступ ко всем функциям системы'
         )
-        db.session.add(company2)
-        print("  - Создана компания: ГринТех КЗ")
+        db.session.add(owner_role)
+        print("  - Создана роль 'Владелец'")
     
-    db.session.flush()  # Сохраняем компании, чтобы получить их ID
-    
-    # Создание тестовых пользователей с email
-    if not User.query.filter_by(email='admin@mail.ru').first():
-        admin = User(
-            email='admin@mail.ru',
-            role='admin',
-            parent_company_id=company1.id
+    operator_role = Role.query.filter_by(name='Оператор').first()
+    if not operator_role:
+        operator_role = Role(
+            name='Оператор',
+            description='Доступ к мониторингу и управлению площадками'
         )
-        admin.set_password('admin123')
-        db.session.add(admin)
-        print("  - Создан пользователь: admin@mail.ru")
+        db.session.add(operator_role)
+        print("  - Создана роль 'Оператор'")
     
-    if not User.query.filter_by(email='user@mail.ru').first():
-        user = User(
-            email='user@mail.ru',
-            role='user',
-            parent_company_id=company1.id
+    db.session.flush()  # Сохраняем роли, чтобы получить их ID
+    
+    # Создание пользователей для ТОО EcoTracker
+    if not User.query.filter_by(email='bocan.anton@mail.ru').first():
+        # Создаем пользователя владельца
+        owner = User(
+            email='bocan.anton@mail.ru',
+            role_id=owner_role.id,
+            parent_company_id=company.id
         )
-        user.set_password('user123')
-        db.session.add(user)
-        print("  - Создан пользователь: user@mail.ru")
-    
-    if not User.query.filter_by(email='manager@mail.ru').first():
-        manager = User(
-            email='manager@mail.ru',
-            role='user',
-            parent_company_id=company2.id
+        owner.set_password('123123')
+        db.session.add(owner)
+        db.session.flush()  # Получаем ID пользователя
+        
+        # Создаем права доступа для владельца (все включено)
+        owner_rights = AccessRight(
+            user_id=owner.id,
+            can_view_monitoring=True,
+            can_view_notifications=True,
+            can_view_locations=True,
+            can_view_reports=True,
+            can_view_admin=True,
+            can_manage_users=True,
+            can_manage_companies=True,
+            can_view_security=True,
+            can_manage_notifications=True,
+            can_create_locations=True,
+            can_edit_locations=True,
+            can_delete_locations=True,
+            can_create_containers=True,
+            can_edit_containers=True,
+            can_delete_containers=True
         )
-        manager.set_password('manager123')
-        db.session.add(manager)
-        print("  - Создан пользователь: manager@mail.ru")
+        db.session.add(owner_rights)
+        print("  - Создан пользователь владелец: bocan.anton@mail.ru")
     
-    # Создание тестовых площадок (если их нет)
-    if Location.query.first() is not None:
-        print("  - Площадки уже существуют, пропускаем")
-        db.session.commit()
-        return
+    if not User.query.filter_by(email='bocan.anton1@mail.ru').first():
+        # Создаем пользователя оператора
+        operator = User(
+            email='bocan.anton1@mail.ru',
+            role_id=operator_role.id,
+            parent_company_id=company.id
+        )
+        operator.set_password('123123')
+        db.session.add(operator)
+        db.session.flush()  # Получаем ID пользователя
+        
+        # Создаем права доступа для оператора (ограниченные)
+        operator_rights = AccessRight(
+            user_id=operator.id,
+            can_view_monitoring=True,
+            can_view_notifications=True,
+            can_view_locations=True,
+            can_view_reports=False,
+            can_view_admin=False,
+            can_manage_users=False,
+            can_manage_companies=False,
+            can_view_security=False,
+            can_manage_notifications=False,
+            can_create_locations=False,
+            can_edit_locations=False,
+            can_delete_locations=False,
+            can_create_containers=False,
+            can_edit_containers=False,
+            can_delete_containers=False
+        )
+        db.session.add(operator_rights)
+        print("  - Создан пользователь оператор: bocan.anton1@mail.ru")
     
-    # Тестовые данные площадок с UUID и привязкой к компаниям
-    # Площадки 1-3 принадлежат EcoService Астана
-    # Площадки 4-5 принадлежат ГринТех КЗ
-    test_locations = [
+    # Создание тестовых площадок
+    locations_data = [
         {
-            'name': 'Площадка #1',
-            'address': 'пр. Кабанбай Батыра, 53, Астана',
-            'lat': 51.128,
-            'lng': 71.430,
-            'containers': [
-                {'number': 1, 'status': 'full', 'fill_level': 95},
-                {'number': 2, 'status': 'empty', 'fill_level': 5},
-                {'number': 3, 'status': 'partial', 'fill_level': 45},
-                {'number': 4, 'status': 'empty', 'fill_level': 10},
-            ],
-            'last_collection': datetime.utcnow() - timedelta(hours=12)
+            'name': 'Мой дом',
+            'address': 'улица Мухамед-Хайдара Дулати 78',
+            'lat': 51.1662999045894,
+            'lng': 71.4417098647614
         },
         {
-            'name': 'Площадка #2',
-            'address': 'пр. Республики, 24, Астана',
-            'lat': 51.124,
-            'lng': 71.427,
-            'containers': [
-                {'number': 1, 'status': 'full', 'fill_level': 85},
-                {'number': 2, 'status': 'empty', 'fill_level': 0},
-                {'number': 3, 'status': 'empty', 'fill_level': 15},
-            ],
-            'last_collection': datetime.utcnow() - timedelta(hours=8)
+            'name': 'Евгений Владимирович',
+            'address': 'улица Кенесары 89/2',
+            'lat': 51.1634876066125,
+            'lng': 71.4623149640136
         },
         {
-            'name': 'Площадка #3',
-            'address': 'ул. Сыганак, 15, Астана',
-            'lat': 51.120,
-            'lng': 71.420,
-            'containers': [
-                {'number': 1, 'status': 'partial', 'fill_level': 55},
-                {'number': 2, 'status': 'partial', 'fill_level': 60},
-                {'number': 3, 'status': 'empty', 'fill_level': 20},
-                {'number': 4, 'status': 'full', 'fill_level': 90},
-            ],
-            'last_collection': datetime.utcnow() - timedelta(hours=24)
-        },
-        {
-            'name': 'Площадка #4',
-            'address': 'ул. Достык, 13, Астана',
-            'lat': 51.126,
-            'lng': 71.440,
-            'containers': [
-                {'number': 1, 'status': 'full', 'fill_level': 100},
-                {'number': 2, 'status': 'full', 'fill_level': 95},
-                {'number': 3, 'status': 'full', 'fill_level': 90},
-                {'number': 4, 'status': 'partial', 'fill_level': 65},
-            ],
-            'last_collection': datetime.utcnow() - timedelta(hours=36)
-        },
-        {
-            'name': 'Площадка #5',
-            'address': 'пр. Туран, 37, Астана',
-            'lat': 51.133,
-            'lng': 71.436,
-            'containers': [
-                {'number': 1, 'status': 'full', 'fill_level': 100},
-                {'number': 2, 'status': 'full', 'fill_level': 100},
-            ],
-            'last_collection': datetime.utcnow() - timedelta(hours=48)
-        },
+            'name': 'Димон',
+            'address': 'улица Бейсекбаева 20',
+            'lat': 51.1710223183345,
+            'lng': 71.4592250905505
+        }
     ]
     
-    # Создание площадок и контейнеров с автоматической генерацией UUID
-    for idx, loc_data in enumerate(test_locations):
-        # Первые 3 площадки для company1, остальные для company2
-        assigned_company_id = company1.id if idx < 3 else company2.id
-        
-        location = Location(
-            name=loc_data['name'],
-            address=loc_data['address'],
-            lat=loc_data['lat'],
-            lng=loc_data['lng'],
-            company_id=assigned_company_id,
-            last_collection=loc_data.get('last_collection')
-        )
-        db.session.add(location)
-        db.session.flush()  # Получаем UUID для location
-        
-        # Создание контейнеров
-        for cont_data in loc_data['containers']:
-            container = Container(
-                location_id=location.id,  # Используем UUID из location
-                number=cont_data['number'],
-                status=cont_data['status'],
-                fill_level=cont_data['fill_level']
+    for loc_data in locations_data:
+        if not Location.query.filter_by(name=loc_data['name'], company_id=company.id).first():
+            location = Location(
+                name=loc_data['name'],
+                address=loc_data['address'],
+                lat=loc_data['lat'],
+                lng=loc_data['lng'],
+                company_id=company.id
             )
-            db.session.add(container)
-        
-        # Обновление статуса площадки
-        db.session.flush()
-        location.update_status()
+            db.session.add(location)
+            db.session.flush()  # Получаем ID площадки
+            
+            # Создаем контейнеры для каждой площадки
+            for i in range(3):  # 3 контейнера на площадку
+                container = Container(
+                    location_id=location.id,
+                    number=i + 1,  # Номер контейнера
+                    fill_level=0,  # Начинаем с пустых контейнеров
+                    status='empty'
+                )
+                db.session.add(container)
+            
+            print(f"  - Создана площадка: {loc_data['name']} с 3 контейнерами")
     
-    db.session.commit()
-    print("\n✓ Тестовые данные успешно загружены!")
-    print("\n📊 Итого создано:")
-    print(f"  - Компании: {Company.query.count()}")
-    print(f"  - Пользователи: {User.query.count()}")
-    print(f"  - Площадки: {Location.query.count()}")
-    print(f"  - Контейнеры: {Container.query.count()}")
-    print("\n👤 Учетные данные для входа:")
-    print("  - admin@mail.ru / admin123 (администратор)")
-    print("  - user@mail.ru / user123 (пользователь)")
-    print("  - manager@mail.ru / manager123 (пользователь)")
+    # Коммитим все изменения
+    try:
+        db.session.commit()
+        print("[OK] Тестовые данные успешно инициализированы")
+    except Exception as e:
+        db.session.rollback()
+        print(f"[ERROR] Ошибка при сохранении данных: {str(e)}")
+        raise
 
+
+if __name__ == "__main__":
+    # Этот блок выполняется только при прямом запуске файла
+    from app import create_app
+    
+    app = create_app()
+    with app.app_context():
+        init_test_data()
