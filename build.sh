@@ -10,6 +10,9 @@ pip install -r requirements.txt
 # Инициализация базы данных и применение миграций
 python migrate_db.py
 
+# Применение индексов БД для оптимизации
+python apply_indexes.py
+
 # Инициализация тестовых данных
 python -c "
 from app import create_app
