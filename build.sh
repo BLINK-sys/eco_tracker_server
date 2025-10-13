@@ -8,19 +8,17 @@ pip install --upgrade pip
 pip install -r requirements.txt
 
 # Инициализация базы данных и применение миграций
+python migrate_db.py
+
+# Инициализация тестовых данных
 python -c "
 from app import create_app
-from models import db
+from init_data import init_test_data
 
 app = create_app('production')
 with app.app_context():
-    db.create_all()
-    print('Database tables created successfully')
-    
-    # Инициализация тестовых данных
-    from init_data import init_test_data
     init_test_data()
-    print('Initial data loaded successfully')
+    print('✅ Initial data loaded successfully')
 "
 
 echo "Build completed successfully!"
