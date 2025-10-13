@@ -128,9 +128,13 @@ def create_app(config_name=None):
     
     # Запуск симулятора датчиков (для тестирования)
     # В продакшене это будет заменено на реальные датчики IoT
-    if app.config['DEBUG']:
+    # Запускаем симулятор в любом режиме для демонстрации
+    try:
         from sensor_simulator import start_sensor_simulator
         start_sensor_simulator(app)
+        print("✅ Sensor simulator started successfully")
+    except Exception as e:
+        print(f"⚠️ Failed to start sensor simulator: {e}")
     
     return app
 

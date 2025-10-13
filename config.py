@@ -16,6 +16,14 @@ class Config:
     database_url = os.getenv('DATABASE_URL', 'sqlite:///ecotracker.db')
     if database_url.startswith('postgres://'):
         database_url = database_url.replace('postgres://', 'postgresql://', 1)
+    
+    # Добавляем параметры SSL для Render PostgreSQL
+    if 'postgresql://' in database_url:
+        if '?' in database_url:
+            database_url += '&sslmode=require'
+        else:
+            database_url += '?sslmode=require'
+    
     SQLALCHEMY_DATABASE_URI = database_url
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     
