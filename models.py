@@ -183,11 +183,18 @@ class Location(db.Model):
     
     def update_status(self):
         """Обновляет статус площадки на основе контейнеров"""
-        if not self.containers:
+        # Убеждаемся что объект в сессии
+        if self not in db.session:
+            db.session.add(self)
+        
+        # Используем явный запрос вместо lazy load
+        containers = Container.query.filter_by(location_id=self.id).all()
+        
+        if not containers:
             self.status = 'empty'
             return
         
-        statuses = [c.status for c in self.containers]
+        statuses = [c.status for c in containers]
         if all(s == 'full' for s in statuses):
             self.status = 'full'
         elif all(s == 'empty' for s in statuses):
