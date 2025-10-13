@@ -7,8 +7,8 @@ import os
 bind = f"0.0.0.0:{os.getenv('PORT', '5000')}"
 
 # Workers
-workers = 2
-worker_class = 'eventlet'  # Для поддержки WebSocket
+workers = 1  # Для WebSocket лучше использовать 1 worker
+worker_class = 'gevent'  # Для поддержки WebSocket и PostgreSQL
 
 # Logging
 accesslog = '-'
@@ -20,5 +20,5 @@ timeout = 120
 keepalive = 5
 
 # Предзагрузка приложения
-preload_app = True
+preload_app = False  # False для gevent
 

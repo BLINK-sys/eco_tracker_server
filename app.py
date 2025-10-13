@@ -28,7 +28,7 @@ def create_app(config_name=None):
     socketio = SocketIO(
         app,
         cors_allowed_origins="*" if app.config['DEBUG'] else app.config['CORS_ORIGINS'],
-        async_mode='threading',
+        async_mode='gevent' if not app.config['DEBUG'] else 'threading',
         logger=True,
         engineio_logger=True
     )
