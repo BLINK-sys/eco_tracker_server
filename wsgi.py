@@ -3,6 +3,11 @@ WSGI entry point для продакшена
 Используется Gunicorn для запуска приложения
 """
 import os
+
+# Monkey patching для gevent (ДОЛЖНО БЫТЬ ПЕРВЫМ!)
+from gevent import monkey
+monkey.patch_all()
+
 from app import create_app, socketio
 
 # Создаем приложение для продакшена
