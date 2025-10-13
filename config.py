@@ -12,8 +12,16 @@ class Config:
     DEBUG = os.getenv('FLASK_ENV', 'development') == 'development'
     
     # Настройки базы данных
-    SQLALCHEMY_DATABASE_URI = os.getenv('DATABASE_URL', 'sqlite:///ecotracker.db')
+    # Render использует postgres://, но SQLAlchemy требует postgresql://
+    database_url = os.getenv('DATABASE_URL', 'sqlite:///ecotracker.db')
+    if database_url.startswith('postgres://'):
+        database_url = database_url.replace('postgres://', 'postgresql://', 1)
+    SQLALCHEMY_DATABASE_URI = database_url
     SQLALCHEMY_TRACK_MODIFICATIONS = False
+    SQLALCHEMY_ENGINE_OPTIONS = {
+        'pool_pre_ping': True,
+        'pool_recycle': 300,
+    }
     
     # Настройки JWT
     JWT_SECRET_KEY = os.getenv('JWT_SECRET_KEY', 'jwt-secret-key-please-change')

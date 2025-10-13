@@ -126,9 +126,11 @@ def create_app(config_name=None):
         from init_data import init_test_data
         init_test_data()
     
-    # Запуск симулятора датчиков (для тестирования)
+    # Запуск симулятора датчиков (ТОЛЬКО для локальной разработки)
     # В продакшене это будет заменено на реальные датчики IoT
-    if app.config['DEBUG']:
+    # Для запуска симулятора в продакшене добавьте переменную ENABLE_SIMULATOR=true
+    enable_simulator = os.getenv('ENABLE_SIMULATOR', 'false').lower() == 'true'
+    if app.config['DEBUG'] or enable_simulator:
         from sensor_simulator import start_sensor_simulator
         start_sensor_simulator(app)
     
