@@ -187,13 +187,13 @@ def simulate_sensor_data(app):
                 print(f"Next: Stage {next_stage_num}/6 - {next_distribution[0]} full, {next_distribution[1]} partial, {next_distribution[2]} empty")
                 print("\nWaiting 10 seconds before next stage...")
                 
-                # Пауза 60 секунд перед следующей стадией (сильно уменьшаем нагрузку)
-                time.sleep(60)
+                # Пауза 10 секунд перед следующей стадией
+                time.sleep(10)
                 
             except Exception as e:
                 logger.error(f'Error in sensor simulator: {str(e)}')
                 print(f"[ERROR] Simulator error: {str(e)}")
-                time.sleep(60)
+                time.sleep(10)
 
 
 def start_sensor_simulator(app):
