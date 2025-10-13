@@ -5,6 +5,16 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+# Импортируем функции для отслеживания соединений
+try:
+    from smart_simulator import increment_connections, decrement_connections
+except ImportError:
+    # Если smart_simulator не импортируется, создаем заглушки
+    def increment_connections():
+        pass
+    def decrement_connections():
+        pass
+
 
 def register_socket_events(socketio):
     """Регистрация обработчиков WebSocket событий"""
@@ -13,12 +23,14 @@ def register_socket_events(socketio):
     def handle_connect():
         """Обработчик подключения клиента"""
         logger.info(f'Client connected: {request.sid}')
+        increment_connections()  # Увеличиваем счетчик активных соединений
         emit('connection_response', {'data': 'Connected to EcoTracker server'})
     
     @socketio.on('disconnect')
     def handle_disconnect():
         """Обработчик отключения клиента"""
         logger.info(f'Client disconnected: {request.sid}')
+        decrement_connections()  # Уменьшаем счетчик активных соединений
     
     @socketio.on('join_company')
     def handle_join_company(data):

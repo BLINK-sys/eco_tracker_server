@@ -126,15 +126,21 @@ def create_app(config_name=None):
         from init_data import init_test_data
         init_test_data()
     
-    # Запуск симулятора датчиков (для тестирования)
+    # Запуск умного симулятора датчиков (работает только при активных соединениях)
     # В продакшене это будет заменено на реальные датчики IoT
-    # Запускаем симулятор в любом режиме для демонстрации
     try:
-        from sensor_simulator import start_sensor_simulator
-        start_sensor_simulator(app)
-        print("✅ Sensor simulator started successfully")
+        from smart_simulator import start_smart_simulator, set_socketio
+        set_socketio(socketio)  # Передаем ссылку на SocketIO
+        start_smart_simulator(app)
+        print("✅ Smart sensor simulator started successfully")
     except Exception as e:
-        print(f"⚠️ Failed to start sensor simulator: {e}")
+        print(f"⚠️ Failed to start smart simulator, falling back to regular simulator: {e}")
+        try:
+            from sensor_simulator import start_sensor_simulator
+            start_sensor_simulator(app)
+            print("✅ Fallback sensor simulator started successfully")
+        except Exception as e2:
+            print(f"⚠️ Failed to start any simulator: {e2}")
     
     return app
 
