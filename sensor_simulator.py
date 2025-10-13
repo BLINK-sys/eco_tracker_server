@@ -26,8 +26,12 @@ def update_container_fill_level(container_id, new_fill_level):
         dict: обновленные данные контейнера и площадки
     """
     try:
+        # Удаляем старую сессию перед новым запросом (важно для gevent)
+        db.session.remove()
+        
         container = Container.query.get(container_id)
         if not container:
+            db.session.rollback()
             return None
         
         # Обновляем уровень заполнения
@@ -66,6 +70,9 @@ def update_container_fill_level(container_id, new_fill_level):
         db.session.rollback()
         logger.error(f'Error updating container {container_id}: {str(e)}')
         return None
+    finally:
+        # Очищаем сессию после каждой операции
+        db.session.remove()
 
 
 def simulate_sensor_data(app):
@@ -119,6 +126,9 @@ def simulate_sensor_data(app):
         
         while True:
             try:
+                # Очищаем сессию перед каждой итерацией
+                db.session.remove()
+                
                 # Получаем только площадки компании ТОО EcoTracker
                 ecotracker_locations = Location.query.filter_by(company_id=ECOTRACKER_COMPANY_ID).all()
                 
