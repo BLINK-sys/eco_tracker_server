@@ -51,6 +51,7 @@ def update_container_fill_level(container_id, new_fill_level):
         db.session.commit()
         
         # Отправляем обновление через WebSocket
+        print(f"[BROADCAST] Container {container.id}: {container.fill_level}% -> company_{location.company_id}")
         broadcast_container_update(container, location)
         
         logger.info(f'Container {container_id} updated: fill_level={new_fill_level}%, status={container.status}')
