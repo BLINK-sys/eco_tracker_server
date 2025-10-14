@@ -183,24 +183,52 @@ class Location(db.Model):
     
     def update_status(self):
         """Обновляет статус площадки на основе контейнеров"""
-        # Убеждаемся что объект в сессии
-        if self not in db.session:
-            db.session.add(self)
-        
-        # Используем явный запрос вместо lazy load
-        containers = Container.query.filter_by(location_id=self.id).all()
-        
-        if not containers:
-            self.status = 'empty'
-            return
-        
-        statuses = [c.status for c in containers]
-        if all(s == 'full' for s in statuses):
-            self.status = 'full'
-        elif all(s == 'empty' for s in statuses):
-            self.status = 'empty'
-        else:
-            self.status = 'partial'
+        try:
+            # Убеждаемся что объект в сессии
+            if self not in db.session:
+                # Merge объект в текущую сессию вместо add
+                merged_location = db.session.merge(self)
+                # Используем merged объект для дальнейшей работы
+                location_id = merged_location.id
+            else:
+                location_id = self.id
+            
+            # Используем явный запрос через текущую сессию
+            # with_parent не используем, т.к. он может вызвать lazy load
+            containers = db.session.query(Container).filter(
+                Container.location_id == location_id
+            ).all()
+            
+            if not containers:
+                if self in db.session:
+                    self.status = 'empty'
+                else:
+                    merged_location.status = 'empty'
+                return
+            
+            statuses = [c.status for c in containers]
+            new_status = None
+            if all(s == 'full' for s in statuses):
+                new_status = 'full'
+            elif all(s == 'empty' for s in statuses):
+                new_status = 'empty'
+            else:
+                new_status = 'partial'
+            
+            # Обновляем статус на правильном объекте
+            if self in db.session:
+                self.status = new_status
+            else:
+                merged_location.status = new_status
+                
+        except Exception as e:
+            # Логируем ошибку, но не прерываем выполнение
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f'Error in update_status for location {self.id}: {str(e)}')
+            # Устанавливаем безопасное значение по умолчанию
+            if self in db.session:
+                self.status = 'partial'
     
     def to_dict(self):
         """Преобразует модель в словарь"""

@@ -29,9 +29,11 @@ def update_container_fill_level(container_id, new_fill_level):
         # Удаляем старую сессию перед новым запросом (важно для gevent)
         db.session.remove()
         
-        container = Container.query.get(container_id)
+        # Получаем контейнер в текущей сессии
+        container = db.session.query(Container).filter_by(id=container_id).first()
         if not container:
             db.session.rollback()
+            logger.warning(f'Container {container_id} not found')
             return None
         
         # Обновляем уровень заполнения
@@ -45,30 +47,46 @@ def update_container_fill_level(container_id, new_fill_level):
         else:
             container.status = 'full'
         
-        # Получаем площадку
-        location = container.location
+        # Получаем location_id до обращения к relationship
+        location_id = container.location_id
+        company_id_for_log = None
         
-        # Пересчитываем статус площадки
-        location.update_status()
-        
-        # Сохраняем изменения
+        # Сначала commit изменений контейнера
         db.session.commit()
         
-        # Отправляем обновление через WebSocket
-        print(f"[BROADCAST] Container {container.id}: {container.fill_level}% -> company_{location.company_id}")
-        broadcast_container_update(container, location)
-        
-        logger.info(f'Container {container_id} updated: fill_level={new_fill_level}%, status={container.status}')
-        logger.info(f'Location {location.id} updated: status={location.status}')
-        
-        return {
-            'container': container.to_dict(),
-            'location_status': location.status
-        }
+        # Теперь получаем площадку в свежей сессии и обновляем её статус
+        location = db.session.query(Location).filter_by(id=location_id).first()
+        if location:
+            company_id_for_log = location.company_id
+            # Пересчитываем статус площадки
+            location.update_status()
+            # Commit изменений площадки
+            db.session.commit()
+            
+            # Обновляем объект контейнера после commit
+            container = db.session.query(Container).filter_by(id=container_id).first()
+            
+            # Отправляем обновление через WebSocket
+            if company_id_for_log:
+                print(f"[BROADCAST] Container {container.id}: {container.fill_level}% -> company_{company_id_for_log}")
+                broadcast_container_update(container, location)
+            
+            logger.info(f'Container {container_id} updated: fill_level={new_fill_level}%, status={container.status}')
+            logger.info(f'Location {location.id} updated: status={location.status}')
+            
+            return {
+                'container': container.to_dict(),
+                'location_status': location.status
+            }
+        else:
+            logger.warning(f'Location {location_id} not found for container {container_id}')
+            return None
         
     except Exception as e:
         db.session.rollback()
         logger.error(f'Error updating container {container_id}: {str(e)}')
+        import traceback
+        logger.error(traceback.format_exc())
         return None
     finally:
         # Очищаем сессию после каждой операции
