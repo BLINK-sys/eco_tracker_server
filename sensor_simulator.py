@@ -202,7 +202,13 @@ def simulate_sensor_data(app):
                         if location.status != target_status:
                             # Обновляем все контейнеры площадки до нужного уровня
                             containers_updated = 0
-                            for container in location.containers:
+                            
+                            # Получаем контейнеры через явный запрос (избегаем lazy load)
+                            location_containers = db.session.query(Container).filter_by(
+                                location_id=location.id
+                            ).all()
+                            
+                            for container in location_containers:
                                 if container.fill_level != target_fill_level:
                                     result = update_container_fill_level(container.id, target_fill_level)
                                     if result:

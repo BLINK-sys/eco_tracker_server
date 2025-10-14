@@ -183,6 +183,7 @@ class Location(db.Model):
     
     def update_status(self):
         """Обновляет статус площадки на основе контейнеров"""
+        print(f"[DEBUG] update_status called for location {self.id if hasattr(self, 'id') else 'UNKNOWN'} - NEW VERSION v2")
         try:
             # Сохраняем ID до любых операций с сессией
             location_id = self.id
