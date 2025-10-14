@@ -23,18 +23,28 @@ def register_socket_events(socketio):
     def handle_disconnect():
         """Обработчик отключения клиента"""
         logger.info(f'Client disconnected: {request.sid}')
+        print(f"[DISCONNECT] Client {request.sid} disconnected")
         
         # Удаляем клиента из всех комнат компаний
         global active_company_connections
+        removed_from_companies = []
         for company_id in list(active_company_connections.keys()):
             if request.sid in active_company_connections[company_id]:
                 active_company_connections[company_id].remove(request.sid)
+                removed_from_companies.append(company_id)
                 logger.info(f'Removed {request.sid} from company {company_id} active connections')
+                print(f"[DISCONNECT] Removed from company {company_id}")
                 
                 # Если больше нет подключений к этой компании, удаляем её
                 if not active_company_connections[company_id]:
                     del active_company_connections[company_id]
                     logger.info(f'No active connections for company {company_id} - removed from tracking')
+                    print(f"[DISCONNECT] Company {company_id} has no more active connections")
+        
+        if removed_from_companies:
+            print(f"[DISCONNECT] Client removed from {len(removed_from_companies)} company room(s)")
+        else:
+            print(f"[DISCONNECT] Client {request.sid} was not in any company rooms")
     
     @socketio.on('join_company')
     def handle_join_company(data):
@@ -47,10 +57,14 @@ def register_socket_events(socketio):
             global active_company_connections
             if company_id not in active_company_connections:
                 active_company_connections[company_id] = set()
+                print(f"[JOIN] New company room created: {company_id}")
+            
             active_company_connections[company_id].add(request.sid)
             
             logger.info(f'Client {request.sid} joined company room: {company_id}')
             logger.info(f'Active connections for company {company_id}: {len(active_company_connections[company_id])}')
+            print(f"[JOIN] Client {request.sid} joined company {company_id}")
+            print(f"[JOIN] Total active connections for company: {len(active_company_connections[company_id])}")
             emit('joined_company', {'company_id': company_id})
     
     @socketio.on('leave_company')
