@@ -5,6 +5,10 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+# Глобальный словарь для отслеживания активных подключений по компаниям
+# company_id -> set of session IDs
+active_company_connections = {}
+
 
 def register_socket_events(socketio):
     """Регистрация обработчиков WebSocket событий"""
@@ -19,6 +23,18 @@ def register_socket_events(socketio):
     def handle_disconnect():
         """Обработчик отключения клиента"""
         logger.info(f'Client disconnected: {request.sid}')
+        
+        # Удаляем клиента из всех комнат компаний
+        global active_company_connections
+        for company_id in list(active_company_connections.keys()):
+            if request.sid in active_company_connections[company_id]:
+                active_company_connections[company_id].remove(request.sid)
+                logger.info(f'Removed {request.sid} from company {company_id} active connections')
+                
+                # Если больше нет подключений к этой компании, удаляем её
+                if not active_company_connections[company_id]:
+                    del active_company_connections[company_id]
+                    logger.info(f'No active connections for company {company_id} - removed from tracking')
     
     @socketio.on('join_company')
     def handle_join_company(data):
@@ -26,7 +42,15 @@ def register_socket_events(socketio):
         company_id = data.get('company_id')
         if company_id:
             join_room(f'company_{company_id}')
+            
+            # Отслеживаем активное подключение
+            global active_company_connections
+            if company_id not in active_company_connections:
+                active_company_connections[company_id] = set()
+            active_company_connections[company_id].add(request.sid)
+            
             logger.info(f'Client {request.sid} joined company room: {company_id}')
+            logger.info(f'Active connections for company {company_id}: {len(active_company_connections[company_id])}')
             emit('joined_company', {'company_id': company_id})
     
     @socketio.on('leave_company')
@@ -35,6 +59,14 @@ def register_socket_events(socketio):
         company_id = data.get('company_id')
         if company_id:
             leave_room(f'company_{company_id}')
+            
+            # Удаляем из отслеживания
+            global active_company_connections
+            if company_id in active_company_connections:
+                active_company_connections[company_id].discard(request.sid)
+                if not active_company_connections[company_id]:
+                    del active_company_connections[company_id]
+            
             logger.info(f'Client {request.sid} left company room: {company_id}')
 
 
@@ -46,6 +78,48 @@ def set_socketio(socketio_instance):
     global _socketio
     _socketio = socketio_instance
     print("[OK] SocketIO instance registered in socket_events")
+
+
+def has_active_connections(company_id):
+    """
+    Проверяет, есть ли активные WebSocket подключения для компании
+    
+    Args:
+        company_id: ID компании
+    
+    Returns:
+        bool: True если есть активные подключения, False в противном случае
+    """
+    global active_company_connections
+    return company_id in active_company_connections and len(active_company_connections[company_id]) > 0
+
+
+def get_active_companies():
+    """
+    Возвращает список ID компаний с активными подключениями
+    
+    Returns:
+        list: список ID компаний
+    """
+    global active_company_connections
+    return list(active_company_connections.keys())
+
+
+def get_active_connections_count(company_id=None):
+    """
+    Возвращает количество активных подключений
+    
+    Args:
+        company_id: ID компании (опционально). Если не указан, возвращает общее количество
+    
+    Returns:
+        int: количество активных подключений
+    """
+    global active_company_connections
+    if company_id:
+        return len(active_company_connections.get(company_id, set()))
+    else:
+        return sum(len(connections) for connections in active_company_connections.values())
 
 
 def broadcast_container_update(container, location):
@@ -66,6 +140,12 @@ def broadcast_container_update(container, location):
         print(f"[WARNING] Location {location.id} has no company_id!")
         return
     
+    # Проверяем, есть ли активные подключения для этой компании
+    if not has_active_connections(location.company_id):
+        # Не отправляем обновления, если никто не подключен
+        logger.debug(f'No active connections for company {location.company_id}, skipping broadcast')
+        return
+    
     update_data = {
         'container': container.to_dict(),
         'location': {
@@ -79,6 +159,7 @@ def broadcast_container_update(container, location):
     
     print(f"[BROADCAST] Sending 'container_updated' to room: {room_name}")
     print(f"            Container: {container.id}, fill_level: {container.fill_level}%")
+    print(f"            Active clients: {get_active_connections_count(location.company_id)}")
     
     # Отправляем обновление только клиентам этой компании
     _socketio.emit(
@@ -100,6 +181,11 @@ def broadcast_location_update(location):
     global _socketio
     
     if not _socketio or not location.company_id:
+        return
+    
+    # Проверяем, есть ли активные подключения для этой компании
+    if not has_active_connections(location.company_id):
+        logger.debug(f'No active connections for company {location.company_id}, skipping broadcast')
         return
     
     # Отправляем обновление только клиентам этой компании

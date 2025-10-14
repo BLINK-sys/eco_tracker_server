@@ -7,7 +7,7 @@ import time
 import random
 import threading
 from models import db, Container, Location
-from socket_events import broadcast_container_update
+from socket_events import broadcast_container_update, has_active_connections, get_active_connections_count
 from datetime import datetime
 import logging
 
@@ -128,6 +128,17 @@ def simulate_sensor_data(app):
             try:
                 # Очищаем сессию перед каждой итерацией
                 db.session.remove()
+                
+                # Проверяем, есть ли активные подключения для компании ТОО EcoTracker
+                active_connections = get_active_connections_count(ECOTRACKER_COMPANY_ID)
+                
+                if active_connections == 0:
+                    print(f"\n[IDLE] No active WebSocket connections for EcoTracker company")
+                    print(f"       Waiting for users to connect... (checking every 10 seconds)")
+                    time.sleep(10)
+                    continue
+                
+                print(f"\n[ACTIVE] {active_connections} WebSocket connection(s) detected for EcoTracker")
                 
                 # Получаем только площадки компании ТОО EcoTracker
                 ecotracker_locations = Location.query.filter_by(company_id=ECOTRACKER_COMPANY_ID).all()
