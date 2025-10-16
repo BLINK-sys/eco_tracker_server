@@ -178,13 +178,27 @@ def simulate_sensor_data(app):
                 # Проверяем, есть ли активные подключения для компании ТОО EcoTracker
                 active_connections = get_active_connections_count(ECOTRACKER_COMPANY_ID)
                 
-                if active_connections == 0:
-                    print(f"\n[IDLE] No active WebSocket connections for EcoTracker company")
+                # Проверяем, есть ли мобильные пользователи (FCM токены)
+                mobile_users_count = 0
+                if FCM_AVAILABLE:
+                    from models import User, FCMToken
+                    # Получаем пользователей компании с FCM токенами
+                    users_with_fcm = db.session.query(User).filter_by(
+                        parent_company_id=ECOTRACKER_COMPANY_ID
+                    ).join(FCMToken).count()
+                    mobile_users_count = users_with_fcm
+                
+                # Если нет ни веб-пользователей, ни мобильных - переходим в режим ожидания
+                if active_connections == 0 and mobile_users_count == 0:
+                    print(f"\n[IDLE] No active users for EcoTracker company")
+                    print(f"       WebSocket connections: 0, Mobile users: 0")
                     print(f"       Waiting for users to connect... (checking every 10 seconds)")
                     time.sleep(10)
                     continue
                 
-                print(f"\n[ACTIVE] {active_connections} WebSocket connection(s) detected for EcoTracker")
+                print(f"\n[ACTIVE] Users detected for EcoTracker:")
+                print(f"         WebSocket connections: {active_connections}")
+                print(f"         Mobile users (FCM): {mobile_users_count}")
                 
                 # Получаем только площадки компании ТОО EcoTracker
                 ecotracker_locations = Location.query.filter_by(company_id=ECOTRACKER_COMPANY_ID).all()
