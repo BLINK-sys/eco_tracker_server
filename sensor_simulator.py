@@ -21,6 +21,10 @@ except ImportError:
     FCM_AVAILABLE = False
     logger.warning('FCM service not available, mobile notifications will be disabled')
 
+# Кэш последней отправки уведомления по площадке, чтобы избегать дублей
+# location_id -> datetime(last_full_at)
+last_notified_at_by_location = {}
+
 
 def update_container_fill_level(container_id, new_fill_level):
     """
@@ -232,17 +236,13 @@ def simulate_sensor_data(app):
                 else:
                     print(f"[SIMULATOR CHECK] FCM not available")
                 
-                # ВРЕМЕННО: Запускаем симулятор всегда для отладки
-                # TODO: Вернуть проверку подключений после исправления
-                print(f"\n[DEBUG] Running simulator regardless of connections")
-                print(f"         WebSocket connections: {active_connections}, Mobile users: {mobile_users_count}")
-                
-                # if active_connections == 0 and mobile_users_count == 0:
-                #     print(f"\n[IDLE] No active users for EcoTracker company")
-                #     print(f"       WebSocket connections: {active_connections}, Mobile users: {mobile_users_count}")
-                #     print(f"       Waiting for users to connect... (checking every 10 seconds)")
-                #     time.sleep(10)
-                #     continue
+                # Если нет ни веб-пользователей, ни мобильных - переходим в режим ожидания
+                if active_connections == 0 and mobile_users_count == 0:
+                    print(f"\n[IDLE] No active users for EcoTracker company")
+                    print(f"       WebSocket connections: {active_connections}, Mobile users: {mobile_users_count}")
+                    print(f"       Waiting for users to connect... (checking every 10 seconds)")
+                    time.sleep(10)
+                    continue
                 
                 print(f"\n[ACTIVE] Users detected for EcoTracker:")
                 print(f"         WebSocket connections: {active_connections}")
@@ -345,6 +345,16 @@ def simulate_sensor_data(app):
                                     
                                     # Дополнительная проверка: убеждаемся что площадка действительно full
                                     if updated_location and updated_location.status == 'full':
+                                        # Анти-дубль: отправляем только если last_full_at новее чем последний отправленный
+                                        can_send = True
+                                        if updated_location.last_full_at is not None:
+                                            last_sent = last_notified_at_by_location.get(str(location.id))
+                                            if last_sent is not None and updated_location.last_full_at <= last_sent:
+                                                can_send = False
+                                                print(f"[FCM] SKIP duplicate: last_full_at {updated_location.last_full_at} <= last_sent {last_sent}")
+                                        if not can_send:
+                                            pass
+                                        else:
                                         send_location_notification(
                                             location_data={
                                                 'id': str(location.id),
@@ -355,6 +365,9 @@ def simulate_sensor_data(app):
                                             location_updated_at=updated_location.last_full_at
                                         )
                                         print(f"[FCM] ✅ FCM_ID: {fcm_id} - Уведомление отправлено для площадки {location.name}")
+                                            # Обновляем кэш отправки
+                                            if updated_location.last_full_at is not None:
+                                                last_notified_at_by_location[str(location.id)] = updated_location.last_full_at
                                     else:
                                         print(f"[FCM] ⚠️ FCM_ID: {fcm_id} - Площадка {location.name} не full в БД, FCM НЕ отправляем")
                                 except Exception as fcm_error:
