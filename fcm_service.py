@@ -47,15 +47,23 @@ def send_container_notification(container_data, location_data, container_updated
             for token_obj in user.fcm_tokens:
                 # Если указано время обновления контейнера
                 if container_updated_at:
+                    print(f'[FCM CHECK] Пользователь: {user.email}')
+                    print(f'            last_seen_at: {token_obj.last_seen_at}')
+                    print(f'            updated_at: {container_updated_at}')
+                    print(f'            Разница: {(container_updated_at - token_obj.last_seen_at).total_seconds()} сек')
+                    
                     # Отправляем уведомление только если пользователь не был активен после обновления
                     if token_obj.last_seen_at < container_updated_at:
                         fcm_tokens.append(token_obj.token)
-                        logger.debug(f'📱 Пользователь {user.email} неактивен с {token_obj.last_seen_at}, отправляем уведомление')
+                        print(f'            ✅ ОТПРАВЛЯЕМ уведомление')
+                        logger.info(f'📱 FCM: Пользователь {user.email} неактивен с {token_obj.last_seen_at}, отправляем уведомление')
                     else:
-                        logger.debug(f'⏭️ Пользователь {user.email} был активен в {token_obj.last_seen_at}, пропускаем уведомление')
+                        print(f'            ⏭️ ПРОПУСКАЕМ (пользователь был активен)')
+                        logger.info(f'⏭️ FCM: Пользователь {user.email} был активен в {token_obj.last_seen_at}, пропускаем уведомление')
                 else:
                     # Если время не указано, отправляем всем (старое поведение)
                     fcm_tokens.append(token_obj.token)
+                    print(f'[FCM CHECK] Пользователь: {user.email} - время не указано, отправляем всем')
         
         if not fcm_tokens:
             logger.debug(f'Нет FCM токенов для отправки (все пользователи уже видели обновление)')
