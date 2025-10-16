@@ -7,6 +7,7 @@ from .companies import companies_bp
 from .users import users_bp
 from .roles import roles_bp
 from .sensors import sensors_bp
+from .fcm import bp as fcm_bp
 
 
 def register_blueprints(app):
@@ -19,4 +20,5 @@ def register_blueprints(app):
     app.register_blueprint(users_bp, url_prefix='/api/users')
     app.register_blueprint(roles_bp, url_prefix='/api/roles')
     app.register_blueprint(sensors_bp, url_prefix='/api/sensors')
+    app.register_blueprint(fcm_bp)  # FCM уже содержит url_prefix='/api/fcm'
 

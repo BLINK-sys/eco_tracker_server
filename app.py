@@ -125,6 +125,10 @@ def create_app(config_name=None):
         # Инициализация тестовых данных
         from init_data import init_test_data
         init_test_data()
+        
+        # Инициализация Firebase для FCM уведомлений
+        from firebase_config import initialize_firebase
+        initialize_firebase()
     
     # Запуск симулятора датчиков (ТОЛЬКО для локальной разработки)
     # В продакшене это будет заменено на реальные датчики IoT

@@ -297,3 +297,29 @@ class Collection(db.Model):
             'collected_by': self.user.email if self.user else None
         }
 
+
+class FCMToken(db.Model):
+    """Модель FCM токенов для мобильных уведомлений"""
+    __tablename__ = 'fcm_tokens'
+    
+    id = db.Column(db.String(36), primary_key=True, default=generate_uuid)
+    user_id = db.Column(db.String(36), db.ForeignKey('users.id'), nullable=False)
+    token = db.Column(db.String(255), unique=True, nullable=False)
+    device_info = db.Column(db.String(255))  # Информация об устройстве (опционально)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Связь с пользователем
+    user = db.relationship('User', backref=db.backref('fcm_tokens', lazy=True))
+    
+    def to_dict(self):
+        """Преобразует модель в словарь"""
+        return {
+            'id': self.id,
+            'user_id': self.user_id,
+            'token': self.token,
+            'device_info': self.device_info,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None
+        }
+

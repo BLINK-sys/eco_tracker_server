@@ -13,6 +13,14 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+# Импортируем FCM сервис (будет использоваться для мобильных пользователей)
+try:
+    from fcm_service import send_container_notification, send_location_notification
+    FCM_AVAILABLE = True
+except ImportError:
+    FCM_AVAILABLE = False
+    logger.warning('FCM service not available, mobile notifications will be disabled')
+
 
 def update_container_fill_level(container_id, new_fill_level):
     """
@@ -66,10 +74,30 @@ def update_container_fill_level(container_id, new_fill_level):
             # Обновляем объект контейнера после commit
             container = db.session.query(Container).filter_by(id=container_id).first()
             
-            # Отправляем обновление через WebSocket
+            # Отправляем обновления
             if company_id_for_log:
+                # 1. WebSocket для веб-пользователей (работает в реальном времени)
                 print(f"[BROADCAST] Container {container.id}: {container.fill_level}% -> company_{company_id_for_log}")
                 broadcast_container_update(container, location)
+                
+                # 2. FCM для мобильных пользователей (работает даже при закрытом приложении)
+                if FCM_AVAILABLE:
+                    try:
+                        send_container_notification(
+                            container_data={
+                                'id': str(container.id),
+                                'number': container.number,
+                                'status': container.status,
+                                'fill_level': container.fill_level
+                            },
+                            location_data={
+                                'id': str(location.id),
+                                'name': location.name,
+                                'company_id': str(location.company_id)
+                            }
+                        )
+                    except Exception as fcm_error:
+                        logger.error(f'Error sending FCM notification: {fcm_error}')
             
             logger.info(f'Container {container_id} updated: fill_level={new_fill_level}%, status={container.status}')
             logger.info(f'Location {location.id} updated: status={location.status}')
