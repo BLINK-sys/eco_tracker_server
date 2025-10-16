@@ -327,8 +327,12 @@ def simulate_sensor_data(app):
                             # И ТОЛЬКО если статус действительно изменился на 'full'
                             if FCM_AVAILABLE and old_status != 'full' and new_status == 'full':
                                 try:
+                                    # Уникальный ID для отслеживания дублирования
+                                    import time
+                                    fcm_id = f"{location.id}_{int(time.time())}"
+                                    
                                     print(f"[FCM] ПЛОЩАДКА {location.name} изменила статус на FULL: {old_status} -> {new_status}")
-                                    print(f"[FCM] Отправляем уведомление для площадки (не для каждого контейнера)")
+                                    print(f"[FCM] FCM_ID: {fcm_id} - Отправляем уведомление для площадки")
                                     print(f"[FCM] location_id: {location.id}, company_id: {location.company_id}")
                                     print(f"[FCM] last_full_at: {updated_location.last_full_at}")
                                     
@@ -343,9 +347,9 @@ def simulate_sensor_data(app):
                                             },
                                             location_updated_at=updated_location.last_full_at
                                         )
-                                        print(f"[FCM] ✅ Уведомление отправлено для площадки {location.name}")
+                                        print(f"[FCM] ✅ FCM_ID: {fcm_id} - Уведомление отправлено для площадки {location.name}")
                                     else:
-                                        print(f"[FCM] ⚠️ Площадка {location.name} не full в БД, FCM НЕ отправляем")
+                                        print(f"[FCM] ⚠️ FCM_ID: {fcm_id} - Площадка {location.name} не full в БД, FCM НЕ отправляем")
                                 except Exception as fcm_error:
                                     logger.error(f'Error sending FCM location notification: {fcm_error}')
                             elif FCM_AVAILABLE:

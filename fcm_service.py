@@ -196,14 +196,17 @@ def send_location_notification(location_data, location_updated_at=None):
         body = f'{location_data["name"]}: все контейнеры заполнены'
         
         # Отправляем индивидуально каждому токену
+        import time
+        fcm_call_id = f"LOCATION_{int(time.time() * 1000)}"  # Миллисекунды для уникальности
+        
         logger.info(f'📱 FCM LOCATION: Отправка {len(fcm_tokens)} уведомлений о площадке...')
-        print(f'[FCM LOCATION] Отправляем {len(fcm_tokens)} уведомлений для площадки {location_data["name"]}')
-        print(f'[FCM LOCATION] Токены: {[token[:20] + "..." for token in fcm_tokens[:3]]}')  # Показываем первые 3 токена
+        print(f'[FCM LOCATION] CALL_ID: {fcm_call_id} - Отправляем {len(fcm_tokens)} уведомлений для площадки {location_data["name"]}')
+        print(f'[FCM LOCATION] CALL_ID: {fcm_call_id} - Токены: {[token[:20] + "..." for token in fcm_tokens[:3]]}')  # Показываем первые 3 токена
         
         success_count = 0
         for i, token in enumerate(fcm_tokens):
             try:
-                print(f'[FCM LOCATION] Отправка {i+1}/{len(fcm_tokens)} на токен {token[:20]}...')
+                print(f'[FCM LOCATION] CALL_ID: {fcm_call_id} - Отправка {i+1}/{len(fcm_tokens)} на токен {token[:20]}...')
                 single_message = messaging.Message(
                     notification=messaging.Notification(
                         title=title,
@@ -219,14 +222,14 @@ def send_location_notification(location_data, location_updated_at=None):
                 )
                 response = messaging.send(single_message)
                 logger.info(f'📱 FCM LOCATION: Уведомление отправлено на токен {token[:20]}...: {response}')
-                print(f'[FCM LOCATION] ✅ Уведомление {i+1} отправлено: {response}')
+                print(f'[FCM LOCATION] CALL_ID: {fcm_call_id} - ✅ Уведомление {i+1} отправлено: {response}')
                 success_count += 1
             except Exception as token_error:
                 logger.error(f'❌ Ошибка отправки на токен {token[:20]}...: {token_error}')
-                print(f'[FCM LOCATION] ❌ Ошибка отправки {i+1}: {token_error}')
+                print(f'[FCM LOCATION] CALL_ID: {fcm_call_id} - ❌ Ошибка отправки {i+1}: {token_error}')
         
         logger.info(f'📱 FCM LOCATION: Отправлено уведомлений о площадке: {success_count}/{len(fcm_tokens)}')
-        print(f'[FCM LOCATION] ИТОГО: {success_count}/{len(fcm_tokens)} уведомлений отправлено')
+        print(f'[FCM LOCATION] CALL_ID: {fcm_call_id} - ИТОГО: {success_count}/{len(fcm_tokens)} уведомлений отправлено')
         
         return success_count
         
