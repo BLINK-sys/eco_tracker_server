@@ -73,6 +73,8 @@ def send_container_notification(container_data, location_data):
         )
         
         # Отправляем
+        logger.info(f'📱 FCM: Отправка {len(fcm_tokens)} уведомлений...')
+        logger.info(f'📱 FCM: Токены: {fcm_tokens[:2]}...')  # Показываем первые 2 токена
         response = messaging.send_multicast(message)
         logger.info(f'📱 FCM: Отправлено уведомлений: {response.success_count}/{len(fcm_tokens)}')
         
