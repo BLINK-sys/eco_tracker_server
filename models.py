@@ -224,7 +224,9 @@ class Location(db.Model):
             # Если статус ИЗМЕНИЛСЯ на 'full', обновляем last_full_at
             if old_status != 'full' and new_status == 'full':
                 location_in_session.last_full_at = datetime.utcnow()
-                print(f"[LOCATION] {location_in_session.name} стала FULL, обновили last_full_at")
+                print(f"[LOCATION] {location_in_session.name} стала FULL, обновили last_full_at = {location_in_session.last_full_at}")
+            elif new_status == 'full':
+                print(f"[LOCATION] {location_in_session.name} ОСТАЁТСЯ FULL, last_full_at НЕ обновляется (old={old_status})")
             
             # Если self - это тот же объект (в сессии), обновляем и его
             if self in db.session:
