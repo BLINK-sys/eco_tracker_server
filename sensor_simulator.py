@@ -331,57 +331,104 @@ def simulate_sensor_data(app):
                                 new_status = target_status
                                 print(f"[STATUS UPDATE] {location.name}: площадка не найдена, используем target_status = {target_status}")
                             
+                            # КРИТИЧЕСКИ ВАЖНО: Получаем СВЕЖИЙ объект из БД после commit для FCM проверки
+                            # Это гарантирует что мы проверяем актуальный статус
+                            fresh_location_for_fcm = db.session.query(Location).filter_by(id=location.id).first()
+                            
                             # Отправляем FCM уведомление ТОЛЬКО ОДИН РАЗ для площадки
                             # И ТОЛЬКО если статус действительно изменился на 'full'
                             if FCM_AVAILABLE and old_status != 'full' and new_status == 'full':
                                 try:
                                     # Уникальный ID для отслеживания дублирования
-                                    fcm_id = f"{location.id}_{int(time.time())}"
+                                    fcm_id = f"{location.id}_{int(time.time() * 1000)}"
                                     
-                                    print(f"[FCM] ПЛОЩАДКА {location.name} изменила статус на FULL: {old_status} -> {new_status}")
-                                    print(f"[FCM] FCM_ID: {fcm_id} - Отправляем уведомление для площадки")
-                                    print(f"[FCM] location_id: {location.id}, company_id: {location.company_id}")
-                                    print(f"[FCM] last_full_at: {updated_location.last_full_at}")
+                                    print(f"\n{'='*80}")
+                                    print(f"[FCM CHECK] ПЛОЩАДКА {location.name}")
+                                    print(f"[FCM CHECK] FCM_ID: {fcm_id}")
+                                    print(f"[FCM CHECK] Переход статуса: {old_status} -> {new_status}")
+                                    print(f"[FCM CHECK] location_id: {location.id}, company_id: {location.company_id}")
                                     
-                                    # Дополнительная проверка: убеждаемся что площадка действительно full
-                                    if updated_location and updated_location.status == 'full':
-                                        # Анти-дубль: отправляем только если last_full_at новее чем последний отправленный
-                                        can_send = True
-                                        if updated_location.last_full_at is not None:
-                                            last_sent = last_notified_at_by_location.get(str(location.id))
-                                            if last_sent is not None and updated_location.last_full_at <= last_sent:
-                                                can_send = False
-                                                print(f"[FCM] SKIP duplicate: last_full_at {updated_location.last_full_at} <= last_sent {last_sent}")
-                                        if not can_send:
-                                            pass
+                                    # ТРЁХСТУПЕНЧАТАЯ ПРОВЕРКА перед отправкой FCM
+                                    
+                                    # Проверка 1: Свежий объект существует и статус = 'full'
+                                    if not fresh_location_for_fcm:
+                                        print(f"[FCM CHECK] ❌ БЛОК 1: fresh_location_for_fcm = None")
+                                        print(f"{'='*80}\n")
+                                        continue
+                                    
+                                    print(f"[FCM CHECK] ✅ БЛОК 1: fresh_location существует")
+                                    print(f"[FCM CHECK]    Статус в БД: {fresh_location_for_fcm.status}")
+                                    
+                                    if fresh_location_for_fcm.status != 'full':
+                                        print(f"[FCM CHECK] ❌ БЛОК 2: Статус в БД НЕ 'full' ({fresh_location_for_fcm.status}), отменяем FCM")
+                                        print(f"{'='*80}\n")
+                                        continue
+                                    
+                                    print(f"[FCM CHECK] ✅ БЛОК 2: Статус в БД = 'full'")
+                                    
+                                    # Проверка 2: Анти-дубль по last_full_at
+                                    location_id_str = str(location.id)
+                                    last_full_at = fresh_location_for_fcm.last_full_at
+                                    last_sent = last_notified_at_by_location.get(location_id_str)
+                                    
+                                    print(f"[FCM CHECK] БЛОК 3: Проверка дублирования")
+                                    print(f"[FCM CHECK]    last_full_at в БД: {last_full_at}")
+                                    print(f"[FCM CHECK]    last_sent (кэш):  {last_sent}")
+                                    
+                                    if last_full_at is None:
+                                        print(f"[FCM CHECK] ⚠️  last_full_at = None, но статус = 'full' (странно!)")
+                                    elif last_sent is not None:
+                                        # Сравниваем timestamps
+                                        if last_full_at <= last_sent:
+                                            print(f"[FCM CHECK] ❌ БЛОК 3: ДУБЛЬ ОБНАРУЖЕН!")
+                                            print(f"[FCM CHECK]    {last_full_at} <= {last_sent}")
+                                            print(f"[FCM CHECK]    FCM НЕ отправляем")
+                                            print(f"{'='*80}\n")
+                                            continue
                                         else:
-                                            send_location_notification(
-                                                location_data={
-                                                    'id': str(location.id),
-                                                    'name': location.name,
-                                                    'status': new_status,
-                                                    'company_id': str(location.company_id)
-                                                },
-                                                location_updated_at=updated_location.last_full_at
-                                            )
-                                            print(f"[FCM] ✅ FCM_ID: {fcm_id} - Уведомление отправлено для площадки {location.name}")
-                                            # Обновляем кэш отправки
-                                            if updated_location.last_full_at is not None:
-                                                last_notified_at_by_location[str(location.id)] = updated_location.last_full_at
+                                            print(f"[FCM CHECK] ✅ БЛОК 3: last_full_at новее, можно отправлять")
                                     else:
-                                        print(f"[FCM] ⚠️ FCM_ID: {fcm_id} - Площадка {location.name} не full в БД, FCM НЕ отправляем")
+                                        print(f"[FCM CHECK] ✅ БЛОК 3: Первая отправка для этой площадки (кэш пуст)")
+                                    
+                                    # ВСЕ ПРОВЕРКИ ПРОЙДЕНЫ - ОТПРАВЛЯЕМ FCM
+                                    print(f"[FCM SEND] 🚀 ВСЕ ПРОВЕРКИ ПРОЙДЕНЫ, ОТПРАВЛЯЕМ FCM")
+                                    print(f"[FCM SEND] FCM_ID: {fcm_id}")
+                                    
+                                    send_location_notification(
+                                        location_data={
+                                            'id': str(location.id),
+                                            'name': location.name,
+                                            'status': 'full',
+                                            'company_id': str(location.company_id)
+                                        },
+                                        location_updated_at=last_full_at
+                                    )
+                                    
+                                    print(f"[FCM SEND] ✅ FCM_ID: {fcm_id} - Уведомление отправлено")
+                                    
+                                    # Обновляем кэш ТОЛЬКО после успешной отправки
+                                    if last_full_at is not None:
+                                        last_notified_at_by_location[location_id_str] = last_full_at
+                                        print(f"[FCM SEND] 💾 Кэш обновлен: {location_id_str} -> {last_full_at}")
+                                    
+                                    print(f"{'='*80}\n")
+                                    
                                 except Exception as fcm_error:
                                     logger.error(f'Error sending FCM location notification: {fcm_error}')
+                                    print(f"[FCM ERROR] ❌ {fcm_error}")
+                                    print(f"{'='*80}\n")
                             elif FCM_AVAILABLE:
-                                print(f"[FCM] ПЛОЩАДКА {location.name}: {old_status} -> {new_status}, FCM НЕ отправляем")
+                                print(f"[FCM] ПЛОЩАДКА {location.name}: {old_status} -> {new_status}, FCM НЕ отправляем (условие не выполнено)")
                             
                             # Отправляем WebSocket обновления для каждого контейнера
                             # ТОЛЬКО после обновления статуса площадки
                             for container in location_containers:
                                 if container.fill_level == target_fill_level:
                                     print(f"[BROADCAST] Container {container.id}: {container.fill_level}% -> company_{location.company_id}")
-                                    # Используем обновленную площадку для WebSocket
-                                    if updated_location:
+                                    # Используем свежую площадку для WebSocket (тот же объект что и для FCM)
+                                    if fresh_location_for_fcm:
+                                        broadcast_container_update(container, fresh_location_for_fcm)
+                                    elif updated_location:
                                         broadcast_container_update(container, updated_location)
                                     else:
                                         broadcast_container_update(container, location)
