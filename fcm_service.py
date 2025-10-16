@@ -163,28 +163,53 @@ def send_location_notification(location_data, location_updated_at=None):
             return
         
         # Собираем FCM токены только тех пользователей, которые НЕ были активны после обновления площадки
-        fcm_tokens = []
+        # ВАЖНО: используем set для де-дупликации токенов (один пользователь может иметь несколько токенов)
+        fcm_tokens_set = set()
+        user_token_count = {}  # Для отладки
+        
         for user in users:
+            user_tokens_added = 0
             for token_obj in user.fcm_tokens:
                 # Если указано время обновления площадки
                 if location_updated_at:
                     print(f'[FCM LOCATION CHECK] Пользователь: {user.email}')
+                    print(f'                     Токен: {token_obj.token[:20]}...')
                     print(f'                     last_seen_at: {token_obj.last_seen_at}')
                     print(f'                     updated_at: {location_updated_at}')
-                    print(f'                     Разница: {(location_updated_at - token_obj.last_seen_at).total_seconds()} сек')
+                    
+                    if token_obj.last_seen_at and location_updated_at:
+                        print(f'                     Разница: {(location_updated_at - token_obj.last_seen_at).total_seconds()} сек')
                     
                     # Отправляем уведомление только если пользователь не был активен после обновления
                     if token_obj.last_seen_at < location_updated_at:
-                        fcm_tokens.append(token_obj.token)
-                        print(f'                     ✅ ОТПРАВЛЯЕМ уведомление о площадке')
-                        logger.info(f'📱 FCM: Пользователь {user.email} неактивен, отправляем уведомление о площадке')
+                        if token_obj.token not in fcm_tokens_set:
+                            fcm_tokens_set.add(token_obj.token)
+                            user_tokens_added += 1
+                            print(f'                     ✅ ОТПРАВЛЯЕМ уведомление о площадке')
+                            logger.info(f'📱 FCM: Пользователь {user.email} неактивен, отправляем уведомление о площадке')
+                        else:
+                            print(f'                     ⚠️ ДУБЛЬ ТОКЕНА, уже добавлен ранее')
                     else:
                         print(f'                     ⏭️ ПРОПУСКАЕМ (пользователь был активен)')
                         logger.info(f'⏭️ FCM: Пользователь {user.email} был активен, пропускаем уведомление о площадке')
                 else:
                     # Если время не указано, отправляем всем (старое поведение)
-                    fcm_tokens.append(token_obj.token)
-                    print(f'[FCM LOCATION CHECK] Пользователь: {user.email} - время не указано, отправляем всем')
+                    if token_obj.token not in fcm_tokens_set:
+                        fcm_tokens_set.add(token_obj.token)
+                        user_tokens_added += 1
+                        print(f'[FCM LOCATION CHECK] Пользователь: {user.email} - время не указано, отправляем всем')
+                    else:
+                        print(f'[FCM LOCATION CHECK] Пользователь: {user.email} - ДУБЛЬ ТОКЕНА')
+            
+            if user_tokens_added > 0:
+                user_token_count[user.email] = user_tokens_added
+        
+        # Конвертируем set в list для дальнейшей обработки
+        fcm_tokens = list(fcm_tokens_set)
+        
+        if user_token_count:
+            print(f'[FCM DEDUP] Токенов по пользователям: {user_token_count}')
+            print(f'[FCM DEDUP] ИТОГО уникальных токенов: {len(fcm_tokens)}')
         
         if not fcm_tokens:
             logger.debug(f'Нет FCM токенов для отправки (все пользователи уже видели обновление площадки)')
