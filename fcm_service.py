@@ -136,59 +136,93 @@ def send_container_notification(container_data, location_data, container_updated
         return 0
 
 
-def send_location_notification(location_data):
+def send_location_notification(location_data, location_updated_at=None):
     """
     Отправляет FCM уведомление о заполненной площадке
-    ТОЛЬКО мобильным пользователям
+    ТОЛЬКО мобильным пользователям, которые НЕ были активны после обновления
     
     Args:
         location_data: dict с данными площадки (id, name, status, company_id)
+        location_updated_at: datetime когда площадка была обновлена (опционально)
     """
     if not is_firebase_available():
+        logger.debug('Firebase недоступен, FCM уведомления отключены')
+        return
+    
+    # Отправляем уведомления только для заполненных площадок
+    if location_data.get('status') != 'full':
+        logger.debug(f'Площадка {location_data.get("id")} не заполнена ({location_data.get("status")}), FCM уведомление не отправляется')
         return
     
     try:
         company_id = location_data['company_id']
         users = User.query.filter_by(parent_company_id=company_id).all()
         
+        if not users:
+            logger.debug(f'Нет пользователей для компании {company_id}')
+            return
+        
+        # Собираем FCM токены только тех пользователей, которые НЕ были активны после обновления площадки
         fcm_tokens = []
         for user in users:
             for token_obj in user.fcm_tokens:
-                fcm_tokens.append(token_obj.token)
+                # Если указано время обновления площадки
+                if location_updated_at:
+                    print(f'[FCM LOCATION CHECK] Пользователь: {user.email}')
+                    print(f'                     last_seen_at: {token_obj.last_seen_at}')
+                    print(f'                     updated_at: {location_updated_at}')
+                    print(f'                     Разница: {(location_updated_at - token_obj.last_seen_at).total_seconds()} сек')
+                    
+                    # Отправляем уведомление только если пользователь не был активен после обновления
+                    if token_obj.last_seen_at < location_updated_at:
+                        fcm_tokens.append(token_obj.token)
+                        print(f'                     ✅ ОТПРАВЛЯЕМ уведомление о площадке')
+                        logger.info(f'📱 FCM: Пользователь {user.email} неактивен, отправляем уведомление о площадке')
+                    else:
+                        print(f'                     ⏭️ ПРОПУСКАЕМ (пользователь был активен)')
+                        logger.info(f'⏭️ FCM: Пользователь {user.email} был активен, пропускаем уведомление о площадке')
+                else:
+                    # Если время не указано, отправляем всем (старое поведение)
+                    fcm_tokens.append(token_obj.token)
+                    print(f'[FCM LOCATION CHECK] Пользователь: {user.email} - время не указано, отправляем всем')
         
         if not fcm_tokens:
+            logger.debug(f'Нет FCM токенов для отправки (все пользователи уже видели обновление площадки)')
             return
         
-        status_text = {
-            'full': 'заполнена',
-            'partial': 'частично заполнена',
-            'empty': 'пустая'
-        }.get(location_data.get('status', 'unknown'), 'обновлена')
+        status_text = 'заполнена'  # Всегда заполнена, т.к. проверяем выше
         
         title = f'Площадка {status_text}!'
-        body = f'{location_data["name"]}: {status_text}'
+        body = f'{location_data["name"]}: все контейнеры заполнены'
         
-        message = messaging.MulticastMessage(
-            notification=messaging.Notification(
-                title=title,
-                body=body,
-            ),
-            data={
-                'location_id': str(location_data['id']),
-                'location_name': location_data['name'],
-                'status': location_data.get('status', 'unknown'),
-                'payload': 'location_updated',
-            },
-            tokens=fcm_tokens,
-        )
+        # Отправляем индивидуально каждому токену
+        logger.info(f'📱 FCM LOCATION: Отправка {len(fcm_tokens)} уведомлений о площадке...')
         
-        response = messaging.send_multicast(message)
-        logger.info(f'📱 FCM: Отправлено уведомлений о площадке: {response.success_count}/{len(fcm_tokens)}')
+        success_count = 0
+        for token in fcm_tokens:
+            try:
+                single_message = messaging.Message(
+                    notification=messaging.Notification(
+                        title=title,
+                        body=body,
+                    ),
+                    data={
+                        'location_id': str(location_data['id']),
+                        'location_name': location_data['name'],
+                        'status': location_data.get('status', 'unknown'),
+                        'payload': 'location_updated',
+                    },
+                    token=token,
+                )
+                response = messaging.send(single_message)
+                logger.info(f'📱 FCM LOCATION: Уведомление отправлено на токен {token[:20]}...: {response}')
+                success_count += 1
+            except Exception as token_error:
+                logger.error(f'❌ Ошибка отправки на токен {token[:20]}...: {token_error}')
         
-        if response.failure_count > 0:
-            _remove_invalid_tokens(response, fcm_tokens)
+        logger.info(f'📱 FCM LOCATION: Отправлено уведомлений о площадке: {success_count}/{len(fcm_tokens)}')
         
-        return response.success_count
+        return success_count
         
     except Exception as e:
         logger.error(f'❌ Ошибка отправки FCM уведомления о площадке: {e}')

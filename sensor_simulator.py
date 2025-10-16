@@ -72,8 +72,16 @@ def update_container_fill_level(container_id, new_fill_level):
         location = db.session.query(Location).filter_by(id=location_id).first()
         if location:
             company_id_for_log = location.company_id
+            
+            # Сохраняем СТАРЫЙ статус площадки ДО пересчета
+            old_location_status = location.status
+            
             # Пересчитываем статус площадки
             location.update_status()
+            
+            # Проверяем, изменился ли статус ПЛОЩАДКИ на 'full'
+            location_changed_to_full = (old_location_status != 'full' and location.status == 'full')
+            
             # Commit изменений площадки
             db.session.commit()
             
@@ -87,28 +95,23 @@ def update_container_fill_level(container_id, new_fill_level):
                 broadcast_container_update(container, location)
                 
                 # 2. FCM для мобильных пользователей (работает даже при закрытом приложении)
-                # ОТПРАВЛЯЕМ ТОЛЬКО при изменении статуса на 'full'
-                if FCM_AVAILABLE and status_changed_to_full:
+                # ОТПРАВЛЯЕМ ТОЛЬКО при изменении статуса ПЛОЩАДКИ на 'full'
+                if FCM_AVAILABLE and location_changed_to_full:
                     try:
-                        print(f"[FCM] Статус изменился на FULL: {old_status} -> {container.status}, отправляем уведомление")
-                        send_container_notification(
-                            container_data={
-                                'id': str(container.id),
-                                'number': container.number,
-                                'status': container.status,
-                                'fill_level': container.fill_level
-                            },
+                        print(f"[FCM] ПЛОЩАДКА изменила статус на FULL: {old_location_status} -> {location.status}, отправляем уведомление")
+                        send_location_notification(
                             location_data={
                                 'id': str(location.id),
                                 'name': location.name,
+                                'status': location.status,
                                 'company_id': str(location.company_id)
                             },
-                            container_updated_at=container.updated_at  # Передаем время обновления
+                            location_updated_at=location.updated_at  # Передаем время обновления площадки
                         )
                     except Exception as fcm_error:
-                        logger.error(f'Error sending FCM notification: {fcm_error}')
-                elif FCM_AVAILABLE and not status_changed_to_full:
-                    print(f"[FCM] Статус не изменился ({old_status} -> {container.status}), FCM не отправляем")
+                        logger.error(f'Error sending FCM location notification: {fcm_error}')
+                elif FCM_AVAILABLE:
+                    print(f"[FCM] Статус площадки: {old_location_status} -> {location.status}, FCM не отправляем")
             
             logger.info(f'Container {container_id} updated: fill_level={new_fill_level}%, status={container.status}')
             logger.info(f'Location {location.id} updated: status={location.status}')
