@@ -21,9 +21,9 @@ except ImportError:
     FCM_AVAILABLE = False
     logger.warning('FCM service not available, mobile notifications will be disabled')
 
-# Кэш последней отправки уведомления по площадке, чтобы избегать дублей
-# location_id -> datetime(last_full_at)
-last_notified_at_by_location = {}
+# ВАЖНО: Больше НЕ используем кэш в памяти!
+# Кэш сбрасывается при рестарте сервера, что приводит к дублям.
+# Вместо этого проверяем last_full_at напрямую из БД.
 
 
 def update_container_fill_level(container_id, new_fill_level):
@@ -393,29 +393,32 @@ def simulate_sensor_data(app):
                                     
                                     print(f"[FCM CHECK] ✅ БЛОК 2: Статус в БД = 'full'")
                                     
-                                    # Проверка 2: Анти-дубль по last_full_at
-                                    location_id_str = str(location.id)
+                                    # Проверка 3: Анти-дубль - last_full_at должен быть СВЕЖИМ (обновлён только что)
+                                    # Если last_full_at был обновлён более 5 секунд назад, значит это старое изменение
                                     last_full_at = fresh_location_for_fcm.last_full_at
-                                    last_sent = last_notified_at_by_location.get(location_id_str)
+                                    current_time = datetime.utcnow()
                                     
-                                    print(f"[FCM CHECK] БЛОК 3: Проверка дублирования")
+                                    print(f"[FCM CHECK] БЛОК 3: Проверка свежести изменения")
                                     print(f"[FCM CHECK]    last_full_at в БД: {last_full_at}")
-                                    print(f"[FCM CHECK]    last_sent (кэш):  {last_sent}")
+                                    print(f"[FCM CHECK]    current_time:      {current_time}")
                                     
                                     if last_full_at is None:
-                                        print(f"[FCM CHECK] ⚠️  last_full_at = None, но статус = 'full' (странно!)")
-                                    elif last_sent is not None:
-                                        # Сравниваем timestamps
-                                        if last_full_at <= last_sent:
-                                            print(f"[FCM CHECK] ❌ БЛОК 3: ДУБЛЬ ОБНАРУЖЕН!")
-                                            print(f"[FCM CHECK]    {last_full_at} <= {last_sent}")
-                                            print(f"[FCM CHECK]    FCM НЕ отправляем")
-                                            print(f"{'='*80}\n")
-                                            continue
-                                        else:
-                                            print(f"[FCM CHECK] ✅ БЛОК 3: last_full_at новее, можно отправлять")
-                                    else:
-                                        print(f"[FCM CHECK] ✅ БЛОК 3: Первая отправка для этой площадки (кэш пуст)")
+                                        print(f"[FCM CHECK] ❌ БЛОК 3: last_full_at = None, но статус = 'full' (отменяем)")
+                                        print(f"{'='*80}\n")
+                                        continue
+                                    
+                                    # Вычисляем разницу во времени
+                                    time_diff = (current_time - last_full_at).total_seconds()
+                                    print(f"[FCM CHECK]    Разница: {time_diff:.2f} секунд")
+                                    
+                                    # Если last_full_at был обновлён более 5 секунд назад - это старое изменение
+                                    if time_diff > 5.0:
+                                        print(f"[FCM CHECK] ❌ БЛОК 3: last_full_at СТАРЫЙ ({time_diff:.2f}s > 5s)")
+                                        print(f"[FCM CHECK]    Это НЕ новое изменение статуса, FCM НЕ отправляем")
+                                        print(f"{'='*80}\n")
+                                        continue
+                                    
+                                    print(f"[FCM CHECK] ✅ БЛОК 3: last_full_at СВЕЖИЙ ({time_diff:.2f}s <= 5s), это новое изменение!")
                                     
                                     # ВСЕ ПРОВЕРКИ ПРОЙДЕНЫ - ОТПРАВЛЯЕМ FCM
                                     print(f"[FCM SEND] 🚀 ВСЕ ПРОВЕРКИ ПРОЙДЕНЫ, ОТПРАВЛЯЕМ FCM")
@@ -432,12 +435,7 @@ def simulate_sensor_data(app):
                                     )
                                     
                                     print(f"[FCM SEND] ✅ FCM_ID: {fcm_id} - Уведомление отправлено")
-                                    
-                                    # Обновляем кэш ТОЛЬКО после успешной отправки
-                                    if last_full_at is not None:
-                                        last_notified_at_by_location[location_id_str] = last_full_at
-                                        print(f"[FCM SEND] 💾 Кэш обновлен: {location_id_str} -> {last_full_at}")
-                                    
+                                    print(f"[FCM SEND] 💡 Больше не используем кэш в памяти - полагаемся на свежесть last_full_at")
                                     print(f"{'='*80}\n")
                                     
                                 except Exception as fcm_error:
