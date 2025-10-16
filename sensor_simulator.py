@@ -296,7 +296,11 @@ def simulate_sensor_data(app):
                         containers_need_update = any(c.fill_level != target_fill_level for c in location_containers)
                         
                         if containers_need_update:
-                            old_status = location.status
+                            # КРИТИЧЕСКИ ВАЖНО: получаем ТЕКУЩИЙ статус из БД ДО изменений
+                            current_location = db.session.query(Location).filter_by(id=location.id).first()
+                            old_status = current_location.status if current_location else location.status
+                            print(f"[OLD STATUS] {location.name}: old_status из БД = {old_status}")
+                            
                             containers_updated = 0
                             
                             # Обновляем ВСЕ контейнеры площадки до одинакового уровня
@@ -337,6 +341,9 @@ def simulate_sensor_data(app):
                             
                             # Отправляем FCM уведомление ТОЛЬКО ОДИН РАЗ для площадки
                             # И ТОЛЬКО если статус действительно изменился на 'full'
+                            print(f"[FCM CONDITION] {location.name}: FCM_AVAILABLE={FCM_AVAILABLE}, old_status={old_status}, new_status={new_status}")
+                            print(f"[FCM CONDITION] Условие: old_status != 'full' ({old_status != 'full'}) AND new_status == 'full' ({new_status == 'full'})")
+                            
                             if FCM_AVAILABLE and old_status != 'full' and new_status == 'full':
                                 try:
                                     # Уникальный ID для отслеживания дублирования
