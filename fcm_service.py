@@ -25,6 +25,11 @@ def send_container_notification(container_data, location_data):
         logger.debug('Firebase недоступен, FCM уведомления отключены')
         return
     
+    # Добавляем проверку только для заполненных контейнеров
+    if container_data.get('status') != 'full':
+        logger.debug(f'Контейнер {container_data.get("id")} не заполнен ({container_data.get("status")}), FCM уведомление не отправляется')
+        return
+    
     try:
         # Получаем всех пользователей компании
         company_id = location_data['company_id']
@@ -75,14 +80,36 @@ def send_container_notification(container_data, location_data):
         # Отправляем
         logger.info(f'📱 FCM: Отправка {len(fcm_tokens)} уведомлений...')
         logger.info(f'📱 FCM: Токены: {fcm_tokens[:2]}...')  # Показываем первые 2 токена
-        response = messaging.send_multicast(message)
-        logger.info(f'📱 FCM: Отправлено уведомлений: {response.success_count}/{len(fcm_tokens)}')
         
-        # Удаляем недействительные токены
-        if response.failure_count > 0:
-            _remove_invalid_tokens(response, fcm_tokens)
+        # Пробуем отправить каждое уведомление отдельно
+        success_count = 0
+        for token in fcm_tokens:
+            try:
+                single_message = messaging.Message(
+                    notification=messaging.Notification(
+                        title=title,
+                        body=body,
+                    ),
+                    data={
+                        'location_id': str(location_data['id']),
+                        'location_name': location_data['name'],
+                        'container_id': str(container_data['id']),
+                        'container_number': str(container_data['number']),
+                        'status': container_data.get('status', 'unknown'),
+                        'fill_level': str(container_data.get('fill_level', 0)),
+                        'payload': 'container_updated',
+                    },
+                    token=token,
+                )
+                response = messaging.send(single_message)
+                logger.info(f'📱 FCM: Уведомление отправлено на токен {token[:20]}...: {response}')
+                success_count += 1
+            except Exception as token_error:
+                logger.error(f'❌ Ошибка отправки на токен {token[:20]}...: {token_error}')
         
-        return response.success_count
+        logger.info(f'📱 FCM: Отправлено уведомлений: {success_count}/{len(fcm_tokens)}')
+        
+        return success_count
         
     except Exception as e:
         logger.error(f'❌ Ошибка отправки FCM уведомления: {e}')
