@@ -308,6 +308,7 @@ class FCMToken(db.Model):
     device_info = db.Column(db.String(255))  # Информация об устройстве (опционально)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    last_seen_at = db.Column(db.DateTime, default=datetime.utcnow)  # Последний раз когда пользователь был активен
     
     # Связь с пользователем
     user = db.relationship('User', backref=db.backref('fcm_tokens', lazy=True))
@@ -320,6 +321,7 @@ class FCMToken(db.Model):
             'token': self.token,
             'device_info': self.device_info,
             'created_at': self.created_at.isoformat() if self.created_at else None,
-            'updated_at': self.updated_at.isoformat() if self.updated_at else None
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None,
+            'last_seen_at': self.last_seen_at.isoformat() if self.last_seen_at else None
         }
 

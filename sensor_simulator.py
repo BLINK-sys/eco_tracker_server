@@ -94,7 +94,8 @@ def update_container_fill_level(container_id, new_fill_level):
                                 'id': str(location.id),
                                 'name': location.name,
                                 'company_id': str(location.company_id)
-                            }
+                            },
+                            container_updated_at=container.updated_at  # Передаем время обновления
                         )
                     except Exception as fcm_error:
                         logger.error(f'Error sending FCM notification: {fcm_error}')

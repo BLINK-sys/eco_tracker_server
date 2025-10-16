@@ -130,3 +130,47 @@ def get_user_tokens():
         print(f'❌ Ошибка получения FCM токенов: {e}')
         return jsonify({'error': str(e)}), 500
 
+
+@bp.route('/heartbeat', methods=['POST'])
+@jwt_required()
+def update_last_seen():
+    """
+    Обновить last_seen_at для FCM токена пользователя
+    Вызывается когда приложение активно (на переднем плане)
+    
+    Request body:
+    {
+        "token": "fcm_token_string"
+    }
+    """
+    try:
+        user_id = get_jwt_identity()
+        data = request.get_json()
+        
+        if not data or 'token' not in data:
+            return jsonify({'error': 'FCM token required'}), 400
+        
+        token_string = data['token']
+        
+        # Обновляем last_seen_at для токена
+        fcm_token = FCMToken.query.filter_by(
+            user_id=user_id,
+            token=token_string
+        ).first()
+        
+        if fcm_token:
+            fcm_token.last_seen_at = datetime.utcnow()
+            db.session.commit()
+            print(f'🔄 Обновлен last_seen_at для пользователя {user_id}')
+            return jsonify({
+                'message': 'Last seen updated successfully',
+                'last_seen_at': fcm_token.last_seen_at.isoformat()
+            }), 200
+        else:
+            return jsonify({'message': 'FCM token not found'}), 404
+        
+    except Exception as e:
+        db.session.rollback()
+        print(f'❌ Ошибка обновления last_seen_at: {e}')
+        return jsonify({'error': str(e)}), 500
+
