@@ -186,11 +186,11 @@ def simulate_sensor_data(app):
             # Площадка 0: empty -> partial -> full -> partial -> empty -> partial
             0: [0, 60, 100, 60, 0, 60],
             # Площадка 1: partial -> full -> partial -> empty -> partial -> full
-            1: [60, 100, 60, 0, 60, 100],
+            1: [0, 0, 60, 0, 60, 100],
             # Площадка 2: full -> partial -> empty -> partial -> full -> partial
-            2: [100, 60, 0, 60, 100, 60],
+            2: [60, 100, 60, 60, 100, 60],
             # Площадка 3: empty -> partial -> full -> empty -> partial -> full
-            3: [0, 60, 100, 0, 60, 100],
+            3: [100, 100, 0, 0, 60, 0],
             # Площадка 4+: циклически повторяем паттерн
         }
         
