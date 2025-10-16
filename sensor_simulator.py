@@ -44,6 +44,9 @@ def update_container_fill_level(container_id, new_fill_level):
             logger.warning(f'Container {container_id} not found')
             return None
         
+        # Сохраняем старый статус ДО изменения
+        old_status = container.status
+        
         # Обновляем уровень заполнения
         container.fill_level = new_fill_level
         
@@ -54,6 +57,9 @@ def update_container_fill_level(container_id, new_fill_level):
             container.status = 'partial'
         else:
             container.status = 'full'
+        
+        # Проверяем, изменился ли статус на 'full'
+        status_changed_to_full = (old_status != 'full' and container.status == 'full')
         
         # Получаем location_id до обращения к relationship
         location_id = container.location_id
@@ -81,8 +87,10 @@ def update_container_fill_level(container_id, new_fill_level):
                 broadcast_container_update(container, location)
                 
                 # 2. FCM для мобильных пользователей (работает даже при закрытом приложении)
-                if FCM_AVAILABLE:
+                # ОТПРАВЛЯЕМ ТОЛЬКО при изменении статуса на 'full'
+                if FCM_AVAILABLE and status_changed_to_full:
                     try:
+                        print(f"[FCM] Статус изменился на FULL: {old_status} -> {container.status}, отправляем уведомление")
                         send_container_notification(
                             container_data={
                                 'id': str(container.id),
@@ -99,6 +107,8 @@ def update_container_fill_level(container_id, new_fill_level):
                         )
                     except Exception as fcm_error:
                         logger.error(f'Error sending FCM notification: {fcm_error}')
+                elif FCM_AVAILABLE and not status_changed_to_full:
+                    print(f"[FCM] Статус не изменился ({old_status} -> {container.status}), FCM не отправляем")
             
             logger.info(f'Container {container_id} updated: fill_level={new_fill_level}%, status={container.status}')
             logger.info(f'Location {location.id} updated: status={location.status}')
