@@ -292,17 +292,57 @@ def simulate_sensor_data(app):
                             containers_updated = 0
                             
                             # Обновляем ВСЕ контейнеры площадки до одинакового уровня
+                            # НО НЕ отправляем FCM уведомления для каждого контейнера
                             for container in location_containers:
                                 if container.fill_level != target_fill_level:
-                                    result = update_container_fill_level(container.id, target_fill_level)
-                                    if result:
-                                        containers_updated += 1
+                                    # Обновляем только fill_level и status, БЕЗ отправки FCM
+                                    container.fill_level = target_fill_level
+                                    
+                                    # Автоматически определяем статус по уровню заполнения
+                                    if target_fill_level == 0:
+                                        container.status = 'empty'
+                                    elif target_fill_level < 70:
+                                        container.status = 'partial'
+                                    else:
+                                        container.status = 'full'
+                                    
+                                    containers_updated += 1
+                            
+                            # Commit изменений контейнеров
+                            db.session.commit()
+                            
+                            # Обновляем статус площадки
+                            location.update_status()
+                            db.session.commit()
+                            
+                            # Получаем обновленную площадку
+                            updated_location = db.session.query(Location).filter_by(id=location.id).first()
+                            new_status = updated_location.status if updated_location else target_status
+                            
+                            # Отправляем FCM уведомление ТОЛЬКО ОДИН РАЗ для площадки
+                            if FCM_AVAILABLE and old_status != 'full' and new_status == 'full':
+                                try:
+                                    print(f"[FCM] ПЛОЩАДКА {location.name} изменила статус на FULL: {old_status} -> {new_status}")
+                                    print(f"[FCM] Отправляем уведомление для площадки (не для каждого контейнера)")
+                                    send_location_notification(
+                                        location_data={
+                                            'id': str(location.id),
+                                            'name': location.name,
+                                            'status': new_status,
+                                            'company_id': str(location.company_id)
+                                        },
+                                        location_updated_at=updated_location.last_full_at
+                                    )
+                                except Exception as fcm_error:
+                                    logger.error(f'Error sending FCM location notification: {fcm_error}')
+                            
+                            # Отправляем WebSocket обновления для каждого контейнера
+                            for container in location_containers:
+                                if container.fill_level == target_fill_level:
+                                    print(f"[BROADCAST] Container {container.id}: {container.fill_level}% -> company_{location.company_id}")
+                                    broadcast_container_update(container, location)
                             
                             if containers_updated > 0:
-                                # Получаем обновленную площадку чтобы узнать новый статус
-                                updated_location = db.session.query(Location).filter_by(id=location.id).first()
-                                new_status = updated_location.status if updated_location else target_status
-                                
                                 print(f"  [{idx}] {location.name}: {old_status} -> {new_status} ({containers_updated} контейнеров -> {target_fill_level}%)")
                                 
                                 # Отслеживаем изменения статуса для статистики
