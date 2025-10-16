@@ -355,16 +355,16 @@ def simulate_sensor_data(app):
                                         if not can_send:
                                             pass
                                         else:
-                                        send_location_notification(
-                                            location_data={
-                                                'id': str(location.id),
-                                                'name': location.name,
-                                                'status': new_status,
-                                                'company_id': str(location.company_id)
-                                            },
-                                            location_updated_at=updated_location.last_full_at
-                                        )
-                                        print(f"[FCM] ✅ FCM_ID: {fcm_id} - Уведомление отправлено для площадки {location.name}")
+                                            send_location_notification(
+                                                location_data={
+                                                    'id': str(location.id),
+                                                    'name': location.name,
+                                                    'status': new_status,
+                                                    'company_id': str(location.company_id)
+                                                },
+                                                location_updated_at=updated_location.last_full_at
+                                            )
+                                            print(f"[FCM] ✅ FCM_ID: {fcm_id} - Уведомление отправлено для площадки {location.name}")
                                             # Обновляем кэш отправки
                                             if updated_location.last_full_at is not None:
                                                 last_notified_at_by_location[str(location.id)] = updated_location.last_full_at
