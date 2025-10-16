@@ -22,3 +22,6 @@ build/
 # Firebase credentials
 firebase-service-account.json
 
+# Mobile app (not tracked in git)
+../ecotracker_mobile/
+
