@@ -28,7 +28,7 @@ def send_container_notification(container_data, location_data):
     try:
         # Получаем всех пользователей компании
         company_id = location_data['company_id']
-        users = User.query.filter_by(company_id=company_id).all()
+        users = User.query.filter_by(parent_company_id=company_id).all()
         
         if not users:
             logger.debug(f'Нет пользователей для компании {company_id}')
@@ -100,7 +100,7 @@ def send_location_notification(location_data):
     
     try:
         company_id = location_data['company_id']
-        users = User.query.filter_by(company_id=company_id).all()
+        users = User.query.filter_by(parent_company_id=company_id).all()
         
         fcm_tokens = []
         for user in users:
