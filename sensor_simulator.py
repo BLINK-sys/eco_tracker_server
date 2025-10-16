@@ -217,6 +217,7 @@ def simulate_sensor_data(app):
                 
                 # Проверяем, есть ли активные подключения для компании ТОО EcoTracker
                 active_connections = get_active_connections_count(ECOTRACKER_COMPANY_ID)
+                print(f"[SIMULATOR CHECK] Active WebSocket connections: {active_connections}")
                 
                 # Проверяем, есть ли мобильные пользователи (FCM токены)
                 mobile_users_count = 0
@@ -227,11 +228,14 @@ def simulate_sensor_data(app):
                         parent_company_id=ECOTRACKER_COMPANY_ID
                     ).join(FCMToken).count()
                     mobile_users_count = users_with_fcm
+                    print(f"[SIMULATOR CHECK] Mobile users with FCM: {mobile_users_count}")
+                else:
+                    print(f"[SIMULATOR CHECK] FCM not available")
                 
                 # Если нет ни веб-пользователей, ни мобильных - переходим в режим ожидания
                 if active_connections == 0 and mobile_users_count == 0:
                     print(f"\n[IDLE] No active users for EcoTracker company")
-                    print(f"       WebSocket connections: 0, Mobile users: 0")
+                    print(f"       WebSocket connections: {active_connections}, Mobile users: {mobile_users_count}")
                     print(f"       Waiting for users to connect... (checking every 10 seconds)")
                     time.sleep(10)
                     continue

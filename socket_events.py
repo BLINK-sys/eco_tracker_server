@@ -131,9 +131,14 @@ def get_active_connections_count(company_id=None):
     """
     global active_company_connections
     if company_id:
-        return len(active_company_connections.get(company_id, set()))
+        count = len(active_company_connections.get(company_id, set()))
+        print(f"[CONNECTION CHECK] Company {company_id}: {count} connections")
+        print(f"[CONNECTION CHECK] All companies: {list(active_company_connections.keys())}")
+        return count
     else:
-        return sum(len(connections) for connections in active_company_connections.values())
+        total = sum(len(connections) for connections in active_company_connections.values())
+        print(f"[CONNECTION CHECK] Total connections: {total}")
+        return total
 
 
 def broadcast_container_update(container, location):
