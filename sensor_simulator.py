@@ -232,13 +232,17 @@ def simulate_sensor_data(app):
                 else:
                     print(f"[SIMULATOR CHECK] FCM not available")
                 
-                # Если нет ни веб-пользователей, ни мобильных - переходим в режим ожидания
-                if active_connections == 0 and mobile_users_count == 0:
-                    print(f"\n[IDLE] No active users for EcoTracker company")
-                    print(f"       WebSocket connections: {active_connections}, Mobile users: {mobile_users_count}")
-                    print(f"       Waiting for users to connect... (checking every 10 seconds)")
-                    time.sleep(10)
-                    continue
+                # ВРЕМЕННО: Запускаем симулятор всегда для отладки
+                # TODO: Вернуть проверку подключений после исправления
+                print(f"\n[DEBUG] Running simulator regardless of connections")
+                print(f"         WebSocket connections: {active_connections}, Mobile users: {mobile_users_count}")
+                
+                # if active_connections == 0 and mobile_users_count == 0:
+                #     print(f"\n[IDLE] No active users for EcoTracker company")
+                #     print(f"       WebSocket connections: {active_connections}, Mobile users: {mobile_users_count}")
+                #     print(f"       Waiting for users to connect... (checking every 10 seconds)")
+                #     time.sleep(10)
+                #     continue
                 
                 print(f"\n[ACTIVE] Users detected for EcoTracker:")
                 print(f"         WebSocket connections: {active_connections}")
@@ -332,7 +336,6 @@ def simulate_sensor_data(app):
                             if FCM_AVAILABLE and old_status != 'full' and new_status == 'full':
                                 try:
                                     # Уникальный ID для отслеживания дублирования
-                                    import time
                                     fcm_id = f"{location.id}_{int(time.time())}"
                                     
                                     print(f"[FCM] ПЛОЩАДКА {location.name} изменила статус на FULL: {old_status} -> {new_status}")
