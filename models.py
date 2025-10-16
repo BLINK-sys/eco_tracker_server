@@ -174,6 +174,7 @@ class Location(db.Model):
     status = db.Column(db.String(20), default='empty')  # empty, partial, full
     company_id = db.Column(db.String(36), db.ForeignKey('companies.id'), nullable=True)
     last_collection = db.Column(db.DateTime)
+    last_full_at = db.Column(db.DateTime)  # Когда площадка в последний раз стала заполненной
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
@@ -214,12 +215,22 @@ class Location(db.Model):
             else:
                 new_status = 'partial'
             
+            # Сохраняем старый статус для проверки изменений
+            old_status = location_in_session.status
+            
             # Обновляем статус в объекте сессии
             location_in_session.status = new_status
+            
+            # Если статус ИЗМЕНИЛСЯ на 'full', обновляем last_full_at
+            if old_status != 'full' and new_status == 'full':
+                location_in_session.last_full_at = datetime.utcnow()
+                print(f"[LOCATION] {location_in_session.name} стала FULL, обновили last_full_at")
             
             # Если self - это тот же объект (в сессии), обновляем и его
             if self in db.session:
                 self.status = new_status
+                if old_status != 'full' and new_status == 'full':
+                    self.last_full_at = datetime.utcnow()
                 
         except Exception as e:
             # Логируем ошибку, но не прерываем выполнение

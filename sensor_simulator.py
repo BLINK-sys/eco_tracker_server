@@ -82,6 +82,10 @@ def update_container_fill_level(container_id, new_fill_level):
             # Проверяем, изменился ли статус ПЛОЩАДКИ на 'full'
             location_changed_to_full = (old_location_status != 'full' and location.status == 'full')
             
+            # Логируем изменение статуса площадки
+            if old_location_status != location.status:
+                print(f"[LOCATION STATUS] {location.name}: {old_location_status} -> {location.status}")
+            
             # Commit изменений площадки
             db.session.commit()
             
@@ -99,6 +103,7 @@ def update_container_fill_level(container_id, new_fill_level):
                 if FCM_AVAILABLE and location_changed_to_full:
                     try:
                         print(f"[FCM] ПЛОЩАДКА изменила статус на FULL: {old_location_status} -> {location.status}, отправляем уведомление")
+                        print(f"[FCM] last_full_at: {location.last_full_at}")
                         send_location_notification(
                             location_data={
                                 'id': str(location.id),
@@ -106,7 +111,7 @@ def update_container_fill_level(container_id, new_fill_level):
                                 'status': location.status,
                                 'company_id': str(location.company_id)
                             },
-                            location_updated_at=location.updated_at  # Передаем время обновления площадки
+                            location_updated_at=location.last_full_at  # Передаем ТОЧНОЕ время когда стала full
                         )
                     except Exception as fcm_error:
                         logger.error(f'Error sending FCM location notification: {fcm_error}')
