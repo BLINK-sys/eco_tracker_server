@@ -225,13 +225,29 @@ class Location(db.Model):
             # КРИТИЧЕСКИ ВАЖНО: вызываем datetime.utcnow() ОДИН РАЗ и используем везде
             if old_status != 'full' and new_status == 'full':
                 now = datetime.utcnow()  # ⚠️ ОДИН вызов для всех объектов
-                location_in_session.last_full_at = now
-                print(f"[LOCATION] {location_in_session.name} стала FULL, обновили last_full_at = {now}")
                 
-                # Если self - это тот же объект (в сессии), обновляем и его ТЕМ ЖЕ ВРЕМЕНЕМ
-                if self in db.session:
-                    self.status = new_status
-                    self.last_full_at = now  # ⚠️ Используем ТОТ ЖЕ timestamp
+                # ВАЖНО: Проверяем, не было ли уже недавнего перехода в full
+                # Если last_full_at существует и был обновлён менее 60 секунд назад - НЕ обновляем
+                # Это предотвращает повторные FCM для площадок, которые "мигают" full -> partial -> full
+                should_update_timestamp = True
+                if location_in_session.last_full_at:
+                    time_since_last_full = (now - location_in_session.last_full_at).total_seconds()
+                    if time_since_last_full < 60:
+                        should_update_timestamp = False
+                        print(f"[LOCATION] {location_in_session.name} стала FULL ПОВТОРНО (через {time_since_last_full:.1f}s), last_full_at НЕ обновляется")
+                
+                if should_update_timestamp:
+                    location_in_session.last_full_at = now
+                    print(f"[LOCATION] {location_in_session.name} стала FULL ВПЕРВЫЕ, обновили last_full_at = {now}")
+                    
+                    # Если self - это тот же объект (в сессии), обновляем и его ТЕМ ЖЕ ВРЕМЕНЕМ
+                    if self in db.session:
+                        self.status = new_status
+                        self.last_full_at = now  # ⚠️ Используем ТОТ ЖЕ timestamp
+                else:
+                    # Обновляем только статус, но НЕ last_full_at
+                    if self in db.session:
+                        self.status = new_status
             elif new_status == 'full':
                 print(f"[LOCATION] {location_in_session.name} ОСТАЁТСЯ FULL, last_full_at НЕ обновляется (old={old_status})")
             
