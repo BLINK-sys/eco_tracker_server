@@ -324,6 +324,8 @@ def simulate_sensor_data(app):
                                 try:
                                     print(f"[FCM] ПЛОЩАДКА {location.name} изменила статус на FULL: {old_status} -> {new_status}")
                                     print(f"[FCM] Отправляем уведомление для площадки (не для каждого контейнера)")
+                                    print(f"[FCM] location_id: {location.id}, company_id: {location.company_id}")
+                                    print(f"[FCM] last_full_at: {updated_location.last_full_at}")
                                     send_location_notification(
                                         location_data={
                                             'id': str(location.id),
@@ -333,8 +335,11 @@ def simulate_sensor_data(app):
                                         },
                                         location_updated_at=updated_location.last_full_at
                                     )
+                                    print(f"[FCM] ✅ Уведомление отправлено для площадки {location.name}")
                                 except Exception as fcm_error:
                                     logger.error(f'Error sending FCM location notification: {fcm_error}')
+                            elif FCM_AVAILABLE:
+                                print(f"[FCM] ПЛОЩАДКА {location.name}: {old_status} -> {new_status}, FCM НЕ отправляем")
                             
                             # Отправляем WebSocket обновления для каждого контейнера
                             for container in location_containers:
