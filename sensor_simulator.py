@@ -177,27 +177,32 @@ def simulate_sensor_data(app):
         print("Starting sensor simulation...")
         
         # НОВАЯ ЛОГИКА: Циклическое изменение уровня заполнения для каждой площадки
-        # Каждая площадка проходит цикл: empty -> partial -> full -> empty
-        # Это гарантирует что каждая площадка станет 'full' ровно ОДИН раз за цикл
+        # Каждая площадка проходит цикл: только empty (0%) и partial (60%)
+        # НИ ОДНА площадка НЕ ДОЛЖНА быть заполненной (100%) - НЕТ УВЕДОМЛЕНИЙ
         
         # Определение стадий для КАЖДОЙ площадки индивидуально
         # fill_levels: уровни заполнения контейнеров на каждой стадии
         location_cycles = {
-            # Площадка 0: empty -> partial -> full -> partial -> empty -> partial
-            0: [0, 60, 100, 60, 0, 60],
-            # Площадка 1: partial -> full -> partial -> empty -> partial -> full
-            1: [0, 0, 60, 0, 60, 100],
-            # Площадка 2: full -> partial -> empty -> partial -> full -> partial
-            2: [60, 100, 60, 60, 100, 60],
-            # Площадка 3: empty -> partial -> full -> empty -> partial -> full
-            3: [100, 100, 0, 0, 60, 0],
-            # Площадка 4+: циклически повторяем паттерн
+            # Площадка 0: empty -> partial -> empty -> partial -> empty -> partial
+            0: [0, 60, 0, 60, 0, 60],
+            # Площадка 1: empty -> empty -> partial -> empty -> partial -> empty
+            1: [0, 0, 60, 0, 60, 0],
+            # Площадка 2: partial -> partial -> partial -> partial -> empty -> partial
+            2: [60, 60, 60, 60, 0, 60],
+            # Площадка 3: empty -> empty -> empty -> empty -> partial -> empty
+            3: [0, 0, 0, 0, 60, 0],
+            # Площадка 4+: циклически повторяем паттерн (только empty и partial)
+            4: [0, 60, 0, 0, 60, 0],
+            5: [60, 0, 60, 0, 60, 0],
+            6: [60, 60, 60, 0, 60, 0],
+            7: [60, 0, 60, 0, 60, 0],
         }
         
         current_stage = 0
         
         print("LOGIC: Каждая площадка независимо проходит цикл заполнения")
-        print("       Это гарантирует что уведомления приходят корректно")
+        print("       НИ ОДНА площадка НЕ СТАНЕТ FULL - НЕТ УВЕДОМЛЕНИЙ")
+        print("       Только empty (0%) и partial (60%) состояния")
         
         while True:
             try:
