@@ -262,6 +262,16 @@ def simulate_sensor_data(app):
                 print(f"STAGE {stage_num}/12 - Updating {len(ecotracker_locations)} locations")
                 print(f"{'='*60}")
                 
+                # Логируем все площадки для проверки на дубли
+                location_names = [f"{loc.name} (ID: {loc.id})" for loc in ecotracker_locations]
+                print(f"[LOCATIONS LIST] {', '.join(location_names)}")
+                
+                # Проверяем на дубли в списке
+                location_ids = [loc.id for loc in ecotracker_locations]
+                if len(location_ids) != len(set(location_ids)):
+                    duplicates = [id for id in location_ids if location_ids.count(id) > 1]
+                    print(f"[WARNING] ⚠️⚠️⚠️ ДУБЛИ В СПИСКЕ ПЛОЩАДОК: {set(duplicates)}")
+                
                 updated_count = 0
                 locations_changed = {
                     'to_full': [],
@@ -269,8 +279,18 @@ def simulate_sensor_data(app):
                     'to_empty': []
                 }
                 
+                # Защита от дублирования: отслеживаем уже обработанные площадки в этом цикле
+                processed_location_ids = set()
+                
                 # Обновляем КАЖДУЮ площадку согласно её индивидуальному циклу
                 for idx, location in enumerate(ecotracker_locations):
+                    # КРИТИЧЕСКАЯ ПРОВЕРКА: если площадка уже была обработана в этом цикле - пропускаем
+                    if location.id in processed_location_ids:
+                        print(f"[DUPLICATE] ⚠️ Площадка {location.name} (ID: {location.id}) уже обработана в этом цикле, ПРОПУСКАЕМ!")
+                        continue
+                    
+                    # Добавляем ID в set обработанных
+                    processed_location_ids.add(location.id)
                     try:
                         # Получаем цикл для этой площадки (повторяем паттерн для площадок > 4)
                         cycle_pattern = location_cycles.get(idx % len(location_cycles), location_cycles[0])
