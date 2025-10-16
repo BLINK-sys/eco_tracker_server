@@ -176,18 +176,28 @@ def simulate_sensor_data(app):
         print(f"[OK] Found company: ТОО EcoTracker ({ECOTRACKER_COMPANY_ID})")
         print("Starting sensor simulation...")
         
-        # Определение стадий (распределение площадок по статусам)
-        # [full_count, partial_count, empty_count]
-        stages = [
-            [1, 1, 1],  # Стадия 1: 1 требует внимание, 1 частично, 1 пустая
-            [1, 2, 0],  # Стадия 2: 1 требует внимание, 2 частично
-            [2, 1, 0],  # Стадия 3: 2 требует внимание, 1 частично
-            [3, 0, 0],  # Стадия 4: 3 требует внимание
-            [0, 0, 3],  # Стадия 5: 3 пустые
-            [0, 1, 2],  # Стадия 6: 2 пустые, 1 частично
-        ]
+        # НОВАЯ ЛОГИКА: Циклическое изменение уровня заполнения для каждой площадки
+        # Каждая площадка проходит цикл: empty -> partial -> full -> empty
+        # Это гарантирует что каждая площадка станет 'full' ровно ОДИН раз за цикл
+        
+        # Определение стадий для КАЖДОЙ площадки индивидуально
+        # fill_levels: уровни заполнения контейнеров на каждой стадии
+        location_cycles = {
+            # Площадка 0: empty -> partial -> full -> partial -> empty -> partial
+            0: [0, 60, 100, 60, 0, 60],
+            # Площадка 1: partial -> full -> partial -> empty -> partial -> full
+            1: [60, 100, 60, 0, 60, 100],
+            # Площадка 2: full -> partial -> empty -> partial -> full -> partial
+            2: [100, 60, 0, 60, 100, 60],
+            # Площадка 3: empty -> partial -> full -> empty -> partial -> full
+            3: [0, 60, 100, 0, 60, 100],
+            # Площадка 4+: циклически повторяем паттерн
+        }
         
         current_stage = 0
+        
+        print("LOGIC: Каждая площадка независимо проходит цикл заполнения")
+        print("       Это гарантирует что уведомления приходят корректно")
         
         while True:
             try:
@@ -220,55 +230,57 @@ def simulate_sensor_data(app):
                 print(f"         Mobile users (FCM): {mobile_users_count}")
                 
                 # Получаем только площадки компании ТОО EcoTracker
-                ecotracker_locations = Location.query.filter_by(company_id=ECOTRACKER_COMPANY_ID).all()
+                ecotracker_locations = Location.query.filter_by(company_id=ECOTRACKER_COMPANY_ID).order_by(Location.name).all()
                 
                 if not ecotracker_locations:
                     print("No EcoTracker locations found, waiting...")
                     time.sleep(10)
                     continue
                 
-                # Если площадок меньше 3, пропускаем
-                if len(ecotracker_locations) < 3:
-                    print(f"Not enough locations ({len(ecotracker_locations)}), need at least 3")
-                    time.sleep(10)
-                    continue
-                
-                stage_distribution = stages[current_stage]
                 stage_num = current_stage + 1
-                full_count, partial_count, empty_count = stage_distribution
                 
                 print(f"\n{'='*60}")
-                print(f"STAGE {stage_num}/6: {full_count} full, {partial_count} partial, {empty_count} empty")
-                print(f"Updating EcoTracker locations...")
-                print(f"Total locations: {len(ecotracker_locations)}")
+                print(f"STAGE {stage_num}/6 - Updating {len(ecotracker_locations)} locations")
                 print(f"{'='*60}")
                 
                 updated_count = 0
+                locations_changed = {
+                    'to_full': [],
+                    'to_partial': [],
+                    'to_empty': []
+                }
                 
-                # Применяем распределение к площадкам
+                # Обновляем КАЖДУЮ площадку согласно её индивидуальному циклу
                 for idx, location in enumerate(ecotracker_locations):
                     try:
-                        # Определяем желаемый статус для этой площадки
-                        if idx < full_count:
-                            target_status = 'full'
-                            target_fill_level = 100
-                        elif idx < full_count + partial_count:
-                            target_status = 'partial'
-                            target_fill_level = 60
-                        else:
-                            target_status = 'empty'
-                            target_fill_level = 0
+                        # Получаем цикл для этой площадки (повторяем паттерн для площадок > 4)
+                        cycle_pattern = location_cycles.get(idx % len(location_cycles), location_cycles[0])
+                        target_fill_level = cycle_pattern[current_stage]
                         
-                        # Проверяем, нужно ли обновлять эту площадку
-                        if location.status != target_status:
-                            # Обновляем все контейнеры площадки до нужного уровня
+                        # Определяем целевой статус
+                        if target_fill_level == 0:
+                            target_status = 'empty'
+                        elif target_fill_level == 100:
+                            target_status = 'full'
+                        else:
+                            target_status = 'partial'
+                        
+                        # Получаем контейнеры через явный запрос (избегаем lazy load)
+                        location_containers = db.session.query(Container).filter_by(
+                            location_id=location.id
+                        ).all()
+                        
+                        if not location_containers:
+                            continue
+                        
+                        # Проверяем, нужно ли обновлять контейнеры
+                        containers_need_update = any(c.fill_level != target_fill_level for c in location_containers)
+                        
+                        if containers_need_update:
+                            old_status = location.status
                             containers_updated = 0
                             
-                            # Получаем контейнеры через явный запрос (избегаем lazy load)
-                            location_containers = db.session.query(Container).filter_by(
-                                location_id=location.id
-                            ).all()
-                            
+                            # Обновляем ВСЕ контейнеры площадки до одинакового уровня
                             for container in location_containers:
                                 if container.fill_level != target_fill_level:
                                     result = update_container_fill_level(container.id, target_fill_level)
@@ -276,23 +288,41 @@ def simulate_sensor_data(app):
                                         containers_updated += 1
                             
                             if containers_updated > 0:
-                                print(f"  Location: {location.name} -> {target_status.upper()}")
-                                print(f"       Updated {containers_updated} containers to {target_fill_level}%")
+                                # Получаем обновленную площадку чтобы узнать новый статус
+                                updated_location = db.session.query(Location).filter_by(id=location.id).first()
+                                new_status = updated_location.status if updated_location else target_status
+                                
+                                print(f"  [{idx}] {location.name}: {old_status} -> {new_status} ({containers_updated} контейнеров -> {target_fill_level}%)")
+                                
+                                # Отслеживаем изменения статуса для статистики
+                                if old_status != new_status:
+                                    if new_status == 'full':
+                                        locations_changed['to_full'].append(location.name)
+                                    elif new_status == 'partial':
+                                        locations_changed['to_partial'].append(location.name)
+                                    elif new_status == 'empty':
+                                        locations_changed['to_empty'].append(location.name)
+                                
                                 updated_count += containers_updated
                     
                     except Exception as e:
                         logger.error(f'Error updating location {location.id}: {str(e)}')
                         continue
                 
-                print(f"\n[OK] Stage {stage_num} complete - Updated {updated_count} containers")
+                # Вывод статистики стадии
+                print(f"\n[STAGE {stage_num} SUMMARY]")
+                print(f"  Обновлено контейнеров: {updated_count}")
+                if locations_changed['to_full']:
+                    print(f"  Стали FULL ({len(locations_changed['to_full'])}): {', '.join(locations_changed['to_full'])}")
+                if locations_changed['to_partial']:
+                    print(f"  Стали PARTIAL ({len(locations_changed['to_partial'])}): {', '.join(locations_changed['to_partial'])}")
+                if locations_changed['to_empty']:
+                    print(f"  Стали EMPTY ({len(locations_changed['to_empty'])}): {', '.join(locations_changed['to_empty'])}")
                 
                 # Переходим к следующей стадии
-                current_stage = (current_stage + 1) % len(stages)
-                next_stage_num = current_stage + 1
-                next_distribution = stages[current_stage]
-                
-                print(f"Next: Stage {next_stage_num}/6 - {next_distribution[0]} full, {next_distribution[1]} partial, {next_distribution[2]} empty")
-                print("\nWaiting 10 seconds before next stage...")
+                current_stage = (current_stage + 1) % 6
+                print(f"\n⏭️  Next: Stage {current_stage + 1}/6")
+                print("⏱️  Waiting 10 seconds before next stage...")
                 
                 # Пауза 10 секунд перед следующей стадией
                 time.sleep(10)
