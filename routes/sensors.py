@@ -81,10 +81,23 @@ def location_sensor_update():
         return '', 200
     
     try:
-        data = request.get_json()
+        # Пытаемся получить JSON данные, даже если Content-Type не установлен правильно
+        data = request.get_json(force=True, silent=True)
+        
+        # Если get_json не сработал, пробуем парсить вручную
+        if not data:
+            try:
+                import json
+                raw_data = request.get_data(as_text=True)
+                if raw_data:
+                    data = json.loads(raw_data)
+                    logger.info(f'Parsed JSON manually from raw data: {len(raw_data)} chars')
+            except Exception as parse_error:
+                logger.warning(f'Failed to parse JSON manually: {parse_error}')
         
         if not data:
-            return jsonify({'error': 'Данные не предоставлены'}), 400
+            logger.error(f'No JSON data received. Content-Type: {request.content_type}, Raw data: {request.get_data(as_text=True)[:200]}')
+            return jsonify({'error': 'Данные не предоставлены или неверный формат JSON'}), 400
             
         location_id = data.get('location_id')
         containers_data = data.get('containers', [])
