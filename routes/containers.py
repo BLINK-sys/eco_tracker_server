@@ -41,9 +41,9 @@ def update_container(container_id):
             container.fill_level = fill_level
             
             # Автоматическое определение статуса по уровню заполнения
-            if fill_level == 0:
+            if fill_level <= 20:
                 container.status = 'empty'
-            elif fill_level < 70:
+            elif fill_level <= 80:
                 container.status = 'partial'
             else:
                 container.status = 'full'
