@@ -1,7 +1,11 @@
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required
-from models import db, Container
-from sensor_simulator import update_container_fill_level
+from models import db, Container, Location
+from container_service import update_container_fill_level, update_location_containers
+import random
+import logging
+
+logger = logging.getLogger(__name__)
 
 sensors_bp = Blueprint('sensors', __name__)
 
@@ -49,6 +53,86 @@ def sensor_update():
         
     except Exception as e:
         return jsonify({'error': f'Ошибка обработки данных: {str(e)}'}), 500
+
+
+@sensors_bp.route('/location-update', methods=['POST', 'OPTIONS'])
+def location_sensor_update():
+    """
+    Основной endpoint для получения данных от датчиков по площадке
+    Принимает данные о заполнении нескольких контейнеров одной площадки
+    
+    Формат данных:
+    {
+        "location_id": "uuid",
+        "containers": [
+            {
+                "container_id": "uuid1",
+                "fill_level": 85
+            },
+            {
+                "container_id": "uuid2", 
+                "fill_level": 45
+            }
+        ],
+        "timestamp": "2024-01-01T12:00:00"  // опционально
+    }
+    """
+    if request.method == 'OPTIONS':
+        return '', 200
+    
+    try:
+        data = request.get_json()
+        
+        if not data:
+            return jsonify({'error': 'Данные не предоставлены'}), 400
+            
+        location_id = data.get('location_id')
+        containers_data = data.get('containers', [])
+        
+        if not location_id:
+            return jsonify({'error': 'Необходимо указать location_id'}), 400
+            
+        if not containers_data:
+            return jsonify({'error': 'Необходимо указать данные контейнеров'}), 400
+        
+        # Валидация данных контейнеров
+        for container_data in containers_data:
+            if not isinstance(container_data, dict):
+                return jsonify({'error': 'Неверный формат данных контейнера'}), 400
+                
+            if 'container_id' not in container_data or 'fill_level' not in container_data:
+                return jsonify({'error': 'Каждый контейнер должен содержать container_id и fill_level'}), 400
+                
+            try:
+                fill_level = int(container_data['fill_level'])
+                if not (0 <= fill_level <= 100):
+                    return jsonify({'error': f'fill_level должен быть от 0 до 100, получен: {fill_level}'}), 400
+                container_data['fill_level'] = fill_level
+            except (ValueError, TypeError):
+                return jsonify({'error': f'fill_level должен быть числом, получен: {container_data["fill_level"]}'}), 400
+        
+        # Обновляем контейнеры площадки
+        result = update_location_containers(location_id, containers_data)
+        
+        if not result['success']:
+            return jsonify({'error': result.get('error', 'Ошибка обработки данных')}), 400
+        
+        response_data = {
+            'message': 'Данные датчиков успешно обработаны',
+            'location': result['location'],
+            'updated_containers': result['updated_containers'],
+            'total_updated': result['total_updated']
+        }
+        
+        # Добавляем информацию об ошибках если есть
+        if result.get('errors'):
+            response_data['warnings'] = result['errors']
+        
+        return jsonify(response_data), 200
+        
+    except Exception as e:
+        logger.error(f'Error in location sensor update: {str(e)}')
+        return jsonify({'error': f'Внутренняя ошибка сервера: {str(e)}'}), 500
 
 
 @sensors_bp.route('/test-update/<string:container_id>', methods=['POST'])

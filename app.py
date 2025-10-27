@@ -130,13 +130,8 @@ def create_app(config_name=None):
         from firebase_config import initialize_firebase
         initialize_firebase()
     
-    # Запуск симулятора датчиков (ТОЛЬКО для локальной разработки)
-    # В продакшене это будет заменено на реальные датчики IoT
-    # Для запуска симулятора в продакшене добавьте переменную ENABLE_SIMULATOR=true
-    enable_simulator = os.getenv('ENABLE_SIMULATOR', 'false').lower() == 'true'
-    if app.config['DEBUG'] or enable_simulator:
-        from sensor_simulator import start_sensor_simulator
-        start_sensor_simulator(app)
+    # ПРИМЕЧАНИЕ: Симулятор датчиков убран - теперь используются реальные данные
+    # Данные поступают через API endpoint /api/sensors/location-update
     
     return app
 
